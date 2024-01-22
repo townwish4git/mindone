@@ -35,7 +35,7 @@ do
     --data_path $DATASET_PATH \
     --save_path_with_time False \
     --max_device_memory "59GB" \
-    --cache_dif "this is for webdataset/wids dataset" \
+    --cache_dir "this is for webdataset/wids dataset" \
     --save_path "./runs/$TASK_NAME_AND_SERVER_ID" \
     --is_parallel True > logs_for_distribute/$TASK_NAME_AND_SERVER_ID/log_$i.txt 2>&1 &
 done
