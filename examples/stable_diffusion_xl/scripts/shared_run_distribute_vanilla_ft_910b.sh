@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ $# != 5 ]
+if [ $# != 6 ]
 then
   echo "For Multiple Devices In Single/Multiple Machine"
   echo "Usage Help: bash run_distribute.sh [RANK_TABLE_FILE] [RANK_START] [RANK_END] [RANK_SIZE] [DATASET_PATH]"
@@ -19,6 +19,7 @@ export HCCL_CONNECT_TIMEOUT=7200
 export RANK_TABLE_FILE=$RANK_TABLE_FILE
 export RANK_SIZE=$RANK_SIZE
 export DEVICE_NUM=$(($END_DEVICE - $START_DEVICE))
+export LD_PRELOAD=/usr/local/python3.7.5/lib/python3.7/site-packages/torch/lib/libgomp-d22c30c5.so.1:$LD_PRELOAD
 
 test -d ./logs_for_distribute/$TASK_NAME_AND_SERVER_ID || mkdir -p ./logs_for_distribute/$TASK_NAME_AND_SERVER_ID
 test -d ./runs/$TASK_NAME_AND_SERVER_ID || mkdir -p ./runs/$TASK_NAME_AND_SERVER_ID
