@@ -162,8 +162,8 @@ class LatentDiffusionWithLossGrad(nn.Cell):
     def do_optim(self, loss, grads):
         if not self.accum_steps > 1:
             if self.clip_grad:
-                # grads = clip_grad_global_(grads, clip_norm=self.clip_norm)
-                grads = clip_grad_(grads, clip_norm=self.clip_norm)
+                grads = clip_grad_global_(grads, clip_norm=self.clip_norm)
+                # grads = clip_grad_(grads, clip_norm=self.clip_norm)
             loss = F.depend(loss, self.optimizer(grads))
         else:
             loss = F.depend(
