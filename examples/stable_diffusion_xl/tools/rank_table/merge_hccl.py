@@ -40,11 +40,12 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     print(args.file_list)
+    file_list, postfix = args.file_list[:-1], args.file_list[-1]
 
     server_count = 0
     json_list = []
 
-    for f_name in args.file_list:
+    for f_name in file_list:
         with open(f_name) as f:
             f_json = json.load(f)
             json_list.append(f_json)
@@ -67,7 +68,7 @@ if __name__ == "__main__":
 
     table_path = os.getcwd()
     table_name = os.path.join(table_path,
-                              'hccl_{}s_{}p.json'.format(server_count, rank_id))
+                              'hccl_{}s_{}p_{}.json'.format(server_count, rank_id, postfix))
     with open(table_name, 'w') as table_fp:
         json.dump(hccl_table, table_fp, indent=4)
     sys.stdout.flush()
