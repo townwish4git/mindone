@@ -40,7 +40,7 @@ do
     --clip_grad True \
     --max_grad_norm 1.0 \
     --cache_dir "/lgsl_data/twx/wids_cache" \
-    --server_ip $SERVER_ID \
+    --server_ip $TASK_NAME_AND_SERVER_ID \
     --param_fp16 True \
     --is_parallel True > logs_for_distribute/$TASK_NAME_AND_SERVER_ID/log_$i.txt 2>&1 &
 done
