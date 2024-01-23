@@ -238,8 +238,8 @@ def get_loss_scaler(ms_loss_scaler="static", scale_value=1024, scale_factor=2, s
     return loss_scaler
 
 
-def get_learning_rate(optim_comfig, total_step):
-    base_lr = optim_comfig.get("base_learning_rate", 1.0e-6)
+def get_learning_rate(optim_comfig, total_step, scaler=1.0):
+    base_lr = optim_comfig.get("base_learning_rate", 1.0e-6) * scaler
     if "scheduler_config" in optim_comfig:
         scheduler_config = optim_comfig.get("scheduler_config")
         scheduler = instantiate_from_config(scheduler_config)

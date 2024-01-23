@@ -106,6 +106,7 @@ def get_parser_train():
     parser.add_argument("--cache_dir", type=str, default="./")
     parser.add_argument("--server_ip", type=str, default="")
     parser.add_argument("--save_ckpt_only_once", type=ast.literal_eval, default=False)
+    parser.add_argument("--scale_lr", type=ast.literal_eval, default=False)
     return parser
 
 
@@ -142,7 +143,12 @@ def train(args):
 
     # 4. Create train step func
     assert "optim" in config
-    lr = get_learning_rate(config.optim, config.data.total_step)
+    scaler = (
+        args.rank_size * dataloader.get_batch_size() * args.gradient_accumulation_steps
+        if args.scale_lr
+        else 1.0
+    )
+    lr = get_learning_rate(config.optim, config.data.total_step, scaler)
     scaler = get_loss_scaler(ms_loss_scaler="static", scale_value=1024)
     if isinstance(model.model, nn.Cell):
         optimizer = get_optimizer(
