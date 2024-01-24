@@ -239,14 +239,15 @@ def get_loss_scaler(ms_loss_scaler="static", scale_value=1024, scale_factor=2, s
 
 
 def get_learning_rate(optim_comfig, total_step, scaler=1.0):
-    base_lr = optim_comfig.get("base_learning_rate", 1.0e-6) * scaler
+    base_lr = optim_comfig.get("base_learning_rate", 1.0e-6)
+    scaled_lr = scaler * base_lr
     if "scheduler_config" in optim_comfig:
         scheduler_config = optim_comfig.get("scheduler_config")
         scheduler = instantiate_from_config(scheduler_config)
-        lr = [base_lr * scheduler(step) for step in range(total_step)]
+        lr = [scaled_lr * scheduler(step) for step in range(total_step)]
     else:
-        print(f"scheduler_config not exist, train with base_lr {base_lr}")
-        lr = base_lr
+        print(f"scheduler_config not exist, train with base_lr {base_lr} and lr_scaler {scaler}")
+        lr = scaled_lr
 
     return lr
 
