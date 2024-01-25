@@ -1,57 +1,78 @@
-#!/bin/bash
-# 一键训练启动脚本。参数如下：
-#
-#   TASK_NAME:         设置唯一的任务名。通过任务名为日志、训练结果、单机启动脚本等文件创建相应的存储目录
-#   RANK_TABLE_FILE:   分布式训练需要的HCCL配置文件。通过tools/rank_table/hccl_tools.py在每台机器上生成单机配置文件，
-#                      通过tools/rank_table/merge_hccl.py融合集群内所有单机的配置文件，生成整合后的单个配置文件
-#   DATASET_DIR:       训练数据集目录。
-#   TARGET_DIR:        mindone/examples/stable_diffusion_xl在机器上的完整目录名。
-#   SCRIPT_TO_RUN:     单机训练启动脚本。置于mindone/examples/stable_diffusion_xl/scripts目录下，
-#                      例run_distribute_vanilla_ft_910b.sh。在此设置训练的相关配置，如需更改训练配置，请修改该文件内容！
-#   VALID_IPS:         训练集群所有机器（用内网ip末段表示）
-#   EXECUTE_IPS:       本次启动的机器。为VALID_IPS子集
+# ========================
+# 1. 配置训练脚本参数
+# ========================
 
-TASK_NAME="all_servers_test_00"
-RANK_TABLE_FILE="/lgsl_data/zhy/servers_list/hccl_34s_272p.json"
-DATASET_DIR="/lgsl_data/cv/share/datasets/mdj_2M_v2"
-TARGET_DIR="/lgsl_data/twx/demo0111/mindone/examples/stable_diffusion_xl"
-SCRIPT_TO_RUN="shared_run_distribute_vanilla_ft_910b.sh"
-VALID_IPS=(2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35)
-EXECUTE_IPS=(2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35)
+# 基础设置
+USERNAME="User Name (e.g. root/lgsl)"
+DOCKER_CONTAINER="Docker Container Name (e.g. mindspore）"
+IP_PREFIX="Network ID (e.g. 192.168.203)"
 
-idx=0
-start_ip=2
-end_ip=35
-username="lgsl"
-su_password=""
-machine_password=""
-container_name="mindspore"
-remote_dir="/home/lgsl/"
+# 训练参数设置 [启动训练任务请做相应修改]
+TASK_NAME="Name of Your Training Task"
+DATASET_DIR="path/to/dataset"
+SCRIPT_TO_RUN="distribute_vanilla_ft_910b_to_launch.sh"
+VALID_IPS="An array of Host ID to run training task, RANK_TABLE_FILE would be generated depended on it, e.g. (2 3 4 5)"
+EXECUTE_IPS="An array of Host ID to run training task when script launches, should be subset of VALID_IPS, e.g. (2 3 4 5)"
+SPECIFIC_PYTHON_ARGS=(
+    "Python arguments passed to python script in SCRIPT_TO_RUN"
+    "here are some examples below:"
+    "--config configs/training/sd_xl_base_finetune_910b.yaml"
+    "--weight checkpoints/sd_xl_base_1.0.ckpt"
+    "--param_fp16 True"
+    "--save_ckpt_interval 500"
+    "--save_ckpt_only_once True"
+    "--scale_lr True"
+    "--clip_grad True"
+    "--max_grad_norm 1.0"
+)
+
+# ========================
+# 2. 参数解析
+# ========================
 length=${#VALID_IPS[@]}
+sdxl_dir="$(dirname "$(dirname "$(readlink -f "$0")")")"
+TASK_NAME=${TASK_NAME}/$(date '+%Y-%m-%d_%H:%M:%S')
+specific_python_args=$(IFS=" "; echo "${SPECIFIC_PYTHON_ARGS[*]}")
 
-test -d $TARGET_DIR/scripts/cmds/$TASK_NAME || mkdir -p $TARGET_DIR/scripts/cmds/$TASK_NAME
+cd $sdxl_dir
+test -d $sdxl_dir/scripts/cmds/$TASK_NAME || mkdir -p $sdxl_dir/scripts/cmds/$TASK_NAME
 
-for ((ip=start_ip; ip<=end_ip; ip++)); do
-    if [[ ! " ${VALID_IPS[@]} " =~ " $ip " ]]; then
-        continue
-    fi
 
-    if [[ ! " ${EXECUTE_IPS[@]} " =~ " $ip " ]]; then
-        idx=$(($idx + 1))
-        continue
-    fi
+# ========================
+# 3. 生成rank table配置文件
+# ========================
+# 请提前在tools/rank_table/envs中准备好：集群内各单机的rank table json配置文件
+# 可在单机上通过 python3 python3 tools/rank_table/hccl_tools.py 生成
+hccl_path="${sdxl_dir}/tools/rank_table/envs"
+args=""
+for ip in "${VALID_IPS[@]}"; do 
+    args+=" ${hccl_path}/hccl_8p_01234567_${IP_PREFIX}.${ip}.json"
+done
+python3 $sdxl_dir/tools/rank_table/merge_hccl.py $args "${sdxl_dir}/scripts/cmds/${TASK_NAME}"
+rank_table_file="${sdxl_dir}/scripts/cmds/${TASK_NAME}/hccl_${length}s_$((${length}*8))p.json"
 
-    server="192.168.203.$ip"
-    hccl_json="hccl_8p_01234567_${server}.json"
 
-    # Create a bash script on the remote server
-    ssh "${username}@${server}" "echo '${su_password}' | su -c 'echo \"cd ${TARGET_DIR}\" > ${TARGET_DIR}/scripts/cmds/${TASK_NAME}/vf_bash_${ip}.sh'"
-
-    echo "export HCCL_CONNECT_TIMEOUT=7200" >> ${TARGET_DIR}/scripts/cmds/${TASK_NAME}/vf_bash_${ip}.sh
-    ssh "${username}@${server}" "echo '${su_password}' | su -c 'echo \"bash scripts/${SCRIPT_TO_RUN} ${RANK_TABLE_FILE} \$((${idx}*8)) \$(((${idx}+1)*8)) \$((${length}*8)) ${DATASET_DIR} ${TASK_NAME}_${ip}\" >> ${TARGET_DIR}/scripts/cmds/${TASK_NAME}/vf_bash_${ip}.sh'"
-
-    # Execute the script on the remote server
-    ssh "${username}@${server}" "echo '${su_password}' | su -c 'docker exec -i mindspore bash -c \"\$(cat ${TARGET_DIR}/scripts/cmds/${TASK_NAME}/vf_bash_${ip}.sh)\"'"
-
+# ========================
+# 4. 启动训练任务
+# ========================
+idx=0
+for ip in "${VALID_IPS[@]}"; do
     idx=$(($idx + 1))
+    if [[ ! " ${EXECUTE_IPS[@]} " =~ " $ip " ]]; then
+        continue
+    fi
+
+    start_device=$((($idx - 1) * 8)) 
+    end_device=$(($idx * 8))
+    server="${IP_PREFIX}.${ip}"
+    local_launch_script="${sdxl_dir}/scripts/cmds/${TASK_NAME}/vf_bash_${ip}.sh"
+    python_args="${specific_python_args} --save_path ./runs/${TASK_NAME}/${ip}"
+    
+
+    echo "cd ${sdxl_dir}" >> ${local_launch_script}
+    echo "export HCCL_CONNECT_TIMEOUT=7200" >> ${local_launch_script}
+    echo "bash scripts/${SCRIPT_TO_RUN} ${rank_table_file} $(((${idx}-1)*8)) $((${idx}*8)) $((${length}*8)) ${DATASET_DIR} \"${TASK_NAME}\" ${ip} \"${python_args}\"" >> ${local_launch_script}
+
+    # run training on each machine
+    ssh "${USERNAME}@${server}" "sudo su -c 'docker exec -i ${DOCKER_CONTAINER} bash -c \"\$(cat ${local_launch_script})\"'"
 done
