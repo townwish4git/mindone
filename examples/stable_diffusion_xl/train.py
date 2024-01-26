@@ -128,7 +128,7 @@ def train(args):
         model.model.set_train(True)  # only unet
 
     # cache_dir
-    if args.server_ip is not None:
+    if args.server_ip and "T2I_Webdataset_RndAcs" in config.data.dataset_config["target"]:
         config.data.dataset_config["params"]["cache_dir"] = os.path.join(args.cache_dir, args.server_ip)
     # 3. Create dataloader
     assert "data" in config
