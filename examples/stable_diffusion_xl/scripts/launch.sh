@@ -42,7 +42,7 @@ test -d $sdxl_dir/scripts/cmds/$TASK_NAME || mkdir -p $sdxl_dir/scripts/cmds/$TA
 # 3. 生成rank table配置文件
 # ========================
 # 请提前在tools/rank_table/envs中准备好：集群内各单机的rank table json配置文件
-# 可在单机上通过 python3 python3 tools/rank_table/hccl_tools.py 生成
+# 可在单机上通过 python3 tools/rank_table/hccl_tools.py 生成
 hccl_path="${sdxl_dir}/tools/rank_table/envs"
 args=""
 for ip in "${VALID_IPS[@]}"; do 
