@@ -238,12 +238,14 @@ def get_loss_scaler(ms_loss_scaler="static", scale_value=1024, scale_factor=2, s
     return loss_scaler
 
 
-def get_learning_rate(optim_comfig, total_step, scaler=1.0):
-    base_lr = optim_comfig.get("base_learning_rate", 1.0e-6)
+def get_learning_rate(optim_config, total_step, scaler=1.0):
+    base_lr = optim_config.get("base_learning_rate", 1.0e-6)
     scaled_lr = scaler * base_lr
-    if "scheduler_config" in optim_comfig:
-        scheduler_config = optim_comfig.get("scheduler_config")
+    if "scheduler_config" in optim_config:
+        scheduler_config = optim_config.get("scheduler_config")
         scheduler = instantiate_from_config(scheduler_config)
+        if hasattr(scheduler, "lr_max_decay_steps"):
+            scheduler.lr_max_decay_steps = total_step
         lr = [scaled_lr * scheduler(step) for step in range(total_step)]
     else:
         print(f"scheduler_config not exist, train with base_lr {base_lr} and lr_scaler {scaler}")
@@ -252,8 +254,8 @@ def get_learning_rate(optim_comfig, total_step, scaler=1.0):
     return lr
 
 
-def get_optimizer(optim_comfig, lr, params, filtering=True):
-    optimizer_config = optim_comfig.get("optimizer_config", {"target": "mindspore.nn.SGD"})
+def get_optimizer(optim_config, lr, params, filtering=True):
+    optimizer_config = optim_config.get("optimizer_config", {"target": "mindspore.nn.SGD"})
 
     def decay_filter(x):
         return "norm" not in x.name.lower() and "bias" not in x.name.lower()
@@ -730,3 +732,29 @@ def load_img(image):
     image = image[None].transpose(0, 3, 1, 2)  # (h, w, c) -> (1, c, h, w)
     image = image / 127.5 - 1.0  # norm to (-1, 1)
     return image
+
+
+def compute_snr(noise_scheduler, timesteps):
+    """
+    Computes SNR as per
+    https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L847-L849
+    """
+    alphas_cumprod = noise_scheduler.alphas_cumprod
+    sqrt_alphas_cumprod = alphas_cumprod**0.5
+    sqrt_one_minus_alphas_cumprod = (1.0 - alphas_cumprod) ** 0.5
+
+    # Expand the tensors.
+    # Adapted from https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L1026
+    sqrt_alphas_cumprod = sqrt_alphas_cumprod.to(device=timesteps.device)[timesteps].float()
+    while len(sqrt_alphas_cumprod.shape) < len(timesteps.shape):
+        sqrt_alphas_cumprod = sqrt_alphas_cumprod[..., None]
+    alpha = sqrt_alphas_cumprod.expand(timesteps.shape)
+
+    sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod.to(device=timesteps.device)[timesteps].float()
+    while len(sqrt_one_minus_alphas_cumprod.shape) < len(timesteps.shape):
+        sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[..., None]
+    sigma = sqrt_one_minus_alphas_cumprod.expand(timesteps.shape)
+
+    # Compute SNR.
+    snr = (alpha / sigma) ** 2
+    return snr

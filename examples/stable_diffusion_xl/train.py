@@ -148,7 +148,12 @@ def train(args):
         if args.scale_lr
         else 1.0
     )
-    lr = get_learning_rate(config.optim, config.data.total_step, scaler)
+    total_step = (
+        config.data.total_step
+        if config.data.total_step
+        else int(dataloader.get_dataset_size() / args.rank_size) + 1
+    )
+    lr = get_learning_rate(config.optim, total_step, scaler)
     scaler = get_loss_scaler(ms_loss_scaler="static", scale_value=1024)
     if isinstance(model.model, nn.Cell):
         optimizer = get_optimizer(
