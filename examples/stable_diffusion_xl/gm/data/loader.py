@@ -14,6 +14,7 @@ def create_loader(
     dataset_config,
     per_batch_size,
     total_step=1000,
+    num_epochs=0,
     num_parallel_workers=8,
     shuffle=True,
     drop_remainder=True,
@@ -52,7 +53,11 @@ def create_loader(
     )
     dataset_size = len(dataset)
     num_step_per_epoch = dataset_size // (per_batch_size * rank_size)
-    epoch_size = math.ceil(total_step / num_step_per_epoch)
+    epoch_size = (
+        num_epochs
+        if num_epochs
+        else math.ceil(total_step / num_step_per_epoch)
+    )
 
     de.config.set_seed(1236517205 + rank)
     cores = multiprocessing.cpu_count()
@@ -101,6 +106,7 @@ def create_loader_dreambooth(
     dataset_config,
     per_batch_size,
     total_step=1000,
+    num_epochs=0,
     num_parallel_workers=8,
     shuffle=True,
     drop_remainder=True,
@@ -129,7 +135,11 @@ def create_loader_dreambooth(
     )
     dataset_size = len(dataset)
     num_step_per_epoch = dataset_size // (per_batch_size * rank_size)
-    epoch_size = math.ceil(total_step / num_step_per_epoch)
+    epoch_size = (
+        num_epochs
+        if num_epochs
+        else math.ceil(total_step / num_step_per_epoch)
+    )
 
     de.config.set_seed(1236517205 + rank)
     cores = multiprocessing.cpu_count()
