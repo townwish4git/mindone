@@ -140,6 +140,7 @@ def train(args):
         token_nums=len(model.conditioner.embedders) if args.dataset_load_tokenizer else None,
         **config.data,
     )
+    total_step = config.data.total_step if hasattr(config.data, "total_step") else dataloader.get_dataset_size()
 
     # 4. Create train step func
     assert "optim" in config
@@ -147,11 +148,6 @@ def train(args):
         args.rank_size * dataloader.get_batch_size() * args.gradient_accumulation_steps
         if args.scale_lr
         else 1.0
-    )
-    total_step = (
-        config.data.total_step
-        if config.data.total_step
-        else int(dataloader.get_dataset_size() / args.rank_size) + 1
     )
     lr = get_learning_rate(config.optim, total_step, scaler)
     scaler = get_loss_scaler(ms_loss_scaler="static", scale_value=1024)
