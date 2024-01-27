@@ -15,20 +15,23 @@ export RANK_SIZE=$RANK_SIZE
 export DEVICE_NUM=$(($END_DEVICE - $START_DEVICE))
 export LD_PRELOAD=/usr/local/python3.7.5/lib/python3.7/site-packages/torch/lib/libgomp-d22c30c5.so.1:$LD_PRELOAD
 
-test -d ./logs_for_distribute/$TASK_NAME/$SERVER_ID || mkdir -p ./logs_for_distribute/$TASK_NAME/$SERVER_ID
-test -d ./runs/$TASK_NAME/$SERVER_ID || mkdir -p ./runs/$TASK_NAME/$SERVER_ID
-env > logs_for_distribute/$TASK_NAME/$SERVER_ID/env.log
+sdxl_dir="$(dirname "$(dirname "$(readlink -f "$0")")")"
+test -d $sdxl_dir/tmp/$TASK_NAME || mkdir -p $sdxl_dir/tmp/$TASK_NAME
+test -d $sdxl_dir/logs_for_distribute/$TASK_NAME/$SERVER_ID || mkdir -p $sdxl_dir/logs_for_distribute/$TASK_NAME/$SERVER_ID
+test -d $sdxl_dir/runs/$TASK_NAME/$SERVER_ID || mkdir -p $sdxl_dir/runs/$TASK_NAME/$SERVER_ID
+env > $sdxl_dir/logs_for_distribute/$TASK_NAME/$SERVER_ID/env.log
+cd $sdxl_dir/tmp/$TASK_NAME
 
 for((i=${START_DEVICE}; i<${END_DEVICE}; i++))
 do
   export RANK_ID=${i}
   export DEVICE_ID=$((i-START_DEVICE))
   echo "start training for rank $RANK_ID, device $DEVICE_ID"
-  python train.py $PYTHON_ARGS \
+  python $sdxl_dir/train.py $PYTHON_ARGS \
     --data_path $DATASET_PATH \
-    --save_path "./runs/$TASK_NAME/$SERVER_ID" \
+    --save_path "$sdxl_dir/runs/$TASK_NAME/$SERVER_ID" \
     --save_path_with_time False \
     --max_device_memory "59GB" \
     --is_parallel True \
-    > logs_for_distribute/$TASK_NAME/$SERVER_ID/log_$DEVICE_ID.txt 2>&1 &
+    > $sdxl_dir/logs_for_distribute/$TASK_NAME/$SERVER_ID/log_$DEVICE_ID.txt 2>&1 &
 done

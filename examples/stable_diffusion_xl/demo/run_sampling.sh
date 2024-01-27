@@ -11,7 +11,7 @@ export DEVICE_ID=0  # 指定使用的NPU
 # ==================================
 SAMPLING_TASK_NAME="Sampling task name"
 CKPT_FILE="CKPT file to load, use comma(,) to separate multiple .ckpt files"
-CONFIG_FILE="configs/inference/sd_xl_base.yaml"
+CONFIG_FILE="path/to/sdxl/configs/inference/sd_xl_base.yaml"
 PROMPTS="Prompts lists text file, one row = one prompt"
 SAMPLER="EulerAncestralSampler"
 TASK_TYPE="txt2img"
@@ -24,12 +24,14 @@ NUM_REPEAT=4
 # 3. 推理准备
 # ==================================
 sdxl_dir="$(dirname "$(dirname "$(readlink -f "$0")")")"
-cd $sdxl_dir
-
 ckpt_filename=$(echo "${CKPT_FILE}" | awk -F'/' '{print $NF}')
-demo_save_path=demo/$SAMPLING_TASK_NAME/${ckpt_filename}@${SAMPLER}@${SAMPLE_STEP}steps
+tmp_dir=$sdxl_dir/tmp/$SAMPLING_TASK_NAME/${ckpt_filename}@${SAMPLER}@${SAMPLE_STEP}steps
+demo_save_path=$sdxl_dir/demo/$SAMPLING_TASK_NAME/${ckpt_filename}@${SAMPLER}@${SAMPLE_STEP}steps
 test -d $demo_save_path && demo_save_path=${demo_save_path}@$(date +'%Y-%m-%d-%H:%M:%S')
+test -d $tmp_dir || mkdir -p $tmp_dir
 mkdir -p $demo_save_path
+cd $tmp_dir
+
 
 while IFS= read -r line; do
     for ((i=0; i<$NUM_REPEAT; i++)); do
@@ -41,7 +43,7 @@ done < "$PROMPTS"
 # ==================================
 # 4. 推理
 # ==================================
-python demo/sampling_without_streamlit.py \
+python $sdxl_dir/demo/sampling_without_streamlit.py \
 --task $TASK_TYPE \
 --config $CONFIG_FILE \
 --weight $CKPT_FILE \

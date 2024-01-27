@@ -16,7 +16,7 @@ EXECUTE_IPS="An array of Host ID to run training task when script launches, shou
 SPECIFIC_PYTHON_ARGS=(
     "Python arguments passed to python script in SCRIPT_TO_RUN"
     "here are some examples below:"
-    "--config configs/training/sd_xl_base_finetune_910b.yaml"
+    "--config path/to/sdxl/configs/training/sd_xl_base_finetune_910b.yaml"
     "--weight checkpoints/sd_xl_base_1.0.ckpt"
     "--param_fp16 True"
     "--save_ckpt_interval 500"
@@ -34,7 +34,6 @@ sdxl_dir="$(dirname "$(dirname "$(readlink -f "$0")")")"
 TASK_NAME=${TASK_NAME}/$(date '+%Y-%m-%d_%H:%M:%S')
 specific_python_args=$(IFS=" "; echo "${SPECIFIC_PYTHON_ARGS[*]}")
 
-cd $sdxl_dir
 test -d $sdxl_dir/scripts/cmds/$TASK_NAME || mkdir -p $sdxl_dir/scripts/cmds/$TASK_NAME
 
 
@@ -68,10 +67,8 @@ for ip in "${VALID_IPS[@]}"; do
     local_launch_script="${sdxl_dir}/scripts/cmds/${TASK_NAME}/vf_bash_${ip}.sh"
     python_args="${specific_python_args} --save_path ./runs/${TASK_NAME}/${ip}"
     
-
-    echo "cd ${sdxl_dir}" >> ${local_launch_script}
     echo "export HCCL_CONNECT_TIMEOUT=7200" >> ${local_launch_script}
-    echo "bash scripts/${SCRIPT_TO_RUN} ${rank_table_file} $(((${idx}-1)*8)) $((${idx}*8)) $((${length}*8)) ${DATASET_DIR} \"${TASK_NAME}\" ${ip} \"${python_args}\"" >> ${local_launch_script}
+    echo "bash ${sdxl_dir}/scripts/${SCRIPT_TO_RUN} ${rank_table_file} $(((${idx}-1)*8)) $((${idx}*8)) $((${length}*8)) ${DATASET_DIR} \"${TASK_NAME}\" ${ip} \"${python_args}\"" >> ${local_launch_script}
 
     # run training on each machine
     ssh "${USERNAME}@${server}" "sudo su -c 'docker exec -i ${DOCKER_CONTAINER} bash -c \"\$(cat ${local_launch_script})\"'"
