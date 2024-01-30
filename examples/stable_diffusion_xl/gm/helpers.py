@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 from datetime import datetime
@@ -26,7 +27,7 @@ from omegaconf import DictConfig, ListConfig
 from PIL import Image
 
 import mindspore as ms
-from mindspore import Tensor, context, nn, ops
+from mindspore import Parameter, Tensor, context, nn, ops
 from mindspore.communication.management import get_group_size, get_rank, init
 
 
@@ -90,6 +91,14 @@ VERSION2SPECS = {
 }
 
 
+_ema_op = ops.MultitypeFuncGraph("grad_ema_op")
+
+
+@_ema_op.register("Tensor", "Tensor", "Tensor")
+def _ema_weights(factor, ema_weight, weight):
+    return ops.assign(ema_weight, ema_weight * factor + weight * (1 - factor))
+
+
 def set_default(args):
     seed_everything(args.seed)
 
@@ -114,6 +123,10 @@ def set_default(args):
 
     # data sink step
     if args.data_sink:
+        if os.environ.get("MS_DATASET_SINK_QUEUE") is None:
+            os.environ["MS_DATASET_SINK_QUEUE"] = "10"
+            print("WARNING: Set env `MS_DATASET_SINK_QUEUE` to 10.")
+
         assert args.dataset_load_tokenizer
         args.log_interval = args.sink_size
         if not (args.save_ckpt_interval >= args.sink_size and args.save_ckpt_interval % args.sink_size == 0):
@@ -123,6 +136,10 @@ def set_default(args):
 
     # split weights path
     args.weight = args.weight.split(",") if len(args.weight) > 0 else ""
+
+    # cache
+    if args.cache_latent != args.cache_text_embedding:
+        raise ValueError("Please confirm that `args.cache_latent` and `args.cache_text_embedding` are consistent")
 
     # Directories and Save run settings
     if args.save_path_with_time:
@@ -154,6 +171,65 @@ def set_default(args):
     return args
 
 
+def get_all_reduce_config(model):
+    trainable_params = []
+    all_reduce_fusion_config = []
+
+    i = -1
+
+    if model.conditioner is not None and len(model.conditioner.trainable_params()) > 0:
+        for p in model.conditioner.trainable_params():
+            trainable_params.append(p)
+            i += 1
+        all_reduce_fusion_config.append(i)
+
+    unet = model.model.diffusion_model
+    for p in unet.time_embed.trainable_params():
+        trainable_params.append(p)
+        i += 1
+    for p in unet.label_emb.trainable_params():
+        trainable_params.append(p)
+        i += 1
+    all_reduce_fusion_config.append(i)
+
+    for block in unet.input_blocks:
+        for p in block.trainable_params():
+            trainable_params.append(p)
+            i += 1
+        all_reduce_fusion_config.append(i)
+
+    for p in unet.middle_block.trainable_params():
+        trainable_params.append(p)
+        i += 1
+    all_reduce_fusion_config.append(i)
+
+    for block in unet.output_blocks:
+        for p in block.trainable_params():
+            trainable_params.append(p)
+            i += 1
+        all_reduce_fusion_config.append(i)
+
+    for p in unet.out.trainable_params():
+        trainable_params.append(p)
+        i += 1
+    if hasattr(unet, "id_predictor"):
+        for p in unet.id_predictor.trainable_params():
+            trainable_params.append(p)
+            i += 1
+    all_reduce_fusion_config.append(i)
+
+    trainable_params = tuple(trainable_params)
+
+    num_trainable_params = (
+        len(model.model.trainable_params()) + len(model.conditioner.trainable_params())
+        if model.conditioner is not None
+        else len(model.model.trainable_params())
+    )
+    assert len(trainable_params) == num_trainable_params
+
+    return trainable_params, all_reduce_fusion_config
+
+
 def create_model(
     config: DictConfig,
     checkpoints: Union[str, List[str]] = "",
@@ -164,9 +240,17 @@ def create_model(
     textual_inversion_ckpt: str = None,
     placeholder_token: str = None,
     num_vectors: int = None,
+    load_first_stage_model: bool = True,
+    load_conditioner: bool = True,
 ):
     # create model
-    model = load_model_from_config(config.model, checkpoints, amp_level=amp_level)
+    model = load_model_from_config(
+        config.model,
+        checkpoints,
+        amp_level=amp_level,
+        load_first_stage_model=load_first_stage_model,
+        load_conditioner=load_conditioner,
+    )
 
     if freeze:
         model.set_train(False)
@@ -175,7 +259,12 @@ def create_model(
             p.requires_grad = False
 
     if param_fp16:
-        convert_modules = (model.conditioner, model.first_stage_model)
+        convert_modules = ()
+        if load_conditioner:
+            convert_modules += (model.conditioner,)
+        if load_first_stage_model:
+            convert_modules += (model.first_stage_model,)
+
         if isinstance(model.model, nn.Cell):
             convert_modules += (model.model,)
         else:
@@ -288,7 +377,11 @@ def get_optimizer(optim_config, lr, params, filtering=True):
     return optimizer
 
 
-def load_model_from_config(model_config, ckpts=None, verbose=True, amp_level="O0"):
+def load_model_from_config(
+    model_config, ckpts=None, verbose=True, amp_level="O0", load_first_stage_model=True, load_conditioner=True
+):
+    model_config["params"]["load_first_stage_model"] = load_first_stage_model
+    model_config["params"]["load_conditioner"] = load_conditioner
     model = instantiate_from_config(model_config)
 
     from gm.models.diffusion import DiffusionEngineMultiGraph
@@ -320,6 +413,14 @@ def load_model_from_config(model_config, ckpts=None, verbose=True, amp_level="O0
                     new_k = k[:]
                 _new_sd_dict[new_k] = sd_dict[k]
             sd_dict = _new_sd_dict
+
+            # filter first_stage_model and conditioner
+            _keys = copy.deepcopy(list(sd_dict.keys()))
+            for _k in _keys:
+                if not load_first_stage_model and _k.startswith("first_stage_model."):
+                    sd_dict.pop(_k)
+                if not load_conditioner and _k.startswith("conditioner."):
+                    sd_dict.pop(_k)
 
             m, u = ms.load_param_into_net(model, sd_dict, strict_load=False)
 
@@ -668,19 +769,36 @@ def perform_save_locally(save_path, samples, num_cols=1):
         base_count += 1
 
 
-def _build_lora_ckpt_path(ckpt_path):
-    return ckpt_path.replace(".ckpt", "_lora.ckpt")
+def _build_lora_ckpt_path(ckpt_path, save_ema_ckpt=False, save_lora_ckpt=True):
+    if save_lora_ckpt and not save_ema_ckpt:
+        path = ckpt_path.replace(".ckpt", "_lora.ckpt")
+    elif save_lora_ckpt and save_ema_ckpt:
+        path = ckpt_path.replace(".ckpt", "_lora_ema.ckpt")
+    elif not save_lora_ckpt and save_ema_ckpt:
+        path = ckpt_path.replace(".ckpt", "_ema.ckpt")
+    else:
+        path = ckpt_path
+
+    return path
 
 
 def save_checkpoint(model, path, ckpt_queue, max_num_ckpt, only_save_lora=False):
-    ckpt, ckpt_lora = [], []
+    ckpt, ckpt_lora, ckpt_lora_ema, ckpt_ema = [], [], [], []
     for n, p in model.parameters_and_names():
         # FIXME: save checkpoint bug on mindspore 2.1.0
         if "._backbone" in n:
             _index = n.find("._backbone")
             n = n[:_index] + n[_index + len("._backbone") :]
-        if "lora_" in n:
+        if "lora_" in n and "ema." not in n:
             ckpt_lora.append({"name": n, "data": p})
+        elif "lora_" in n and "ema." in n:
+            _index = n.find("ema.")
+            n = n[:_index] + n[_index + len("ema.") :]
+            ckpt_lora_ema.append({"name": n, "data": p})
+        elif "lora_" not in n and "ema." in n:
+            _index = n.find("ema.")
+            n = n[:_index] + n[_index + len("ema.") :]
+            ckpt_ema.append({"name": n, "data": p})
         else:
             ckpt.append({"name": n, "data": p})
 
@@ -689,11 +807,19 @@ def save_checkpoint(model, path, ckpt_queue, max_num_ckpt, only_save_lora=False)
     if not only_save_lora:
         ms.save_checkpoint(ckpt, path)
         print(f"save checkpoint to {path}")
+        if len(ckpt_ema) > 0:
+            path_ema = _build_lora_ckpt_path(path, save_ema_ckpt=True, save_lora_ckpt=False)
+            ms.save_checkpoint(ckpt_ema, path_ema)
+            print(f"save ema checkpoint to {path_ema}")
 
     if len(ckpt_lora) > 0:
         path_lora = _build_lora_ckpt_path(path)
         ms.save_checkpoint(ckpt_lora, path_lora)
         print(f"save lora checkpoint to {path_lora}")
+        if len(ckpt_lora_ema) > 0:
+            path_lora_ema = _build_lora_ckpt_path(path, save_ema_ckpt=True)
+            ms.save_checkpoint(ckpt_lora_ema, path_lora_ema)
+            print(f"save ema lora checkpoint to {path_lora_ema}")
 
 
 def delete_checkpoint(ckpt_queue, max_num_ckpt, only_save_lora):
@@ -703,10 +829,12 @@ def delete_checkpoint(ckpt_queue, max_num_ckpt, only_save_lora):
     if max_num_ckpt is not None and len(ckpt_queue) >= max_num_ckpt:
         del_ckpt = ckpt_queue.pop(0)
         del_ckpt_lora = _build_lora_ckpt_path(del_ckpt)
+        del_ckpt_ema = _build_lora_ckpt_path(del_ckpt, save_ema_ckpt=True, save_lora_ckpt=False)
+        del_ckpt_lora_ema = _build_lora_ckpt_path(del_ckpt, save_ema_ckpt=True)
         if only_save_lora:
-            del_ckpts = [del_ckpt_lora]
+            del_ckpts = [del_ckpt_lora, del_ckpt_lora_ema]
         else:
-            del_ckpts = [del_ckpt, del_ckpt_lora]
+            del_ckpts = [del_ckpt, del_ckpt_lora, del_ckpt_ema, del_ckpt_lora_ema]
 
         for to_del in del_ckpts:
             if os.path.isfile(to_del):
@@ -746,27 +874,29 @@ def load_img(image):
     return image
 
 
-def compute_snr(noise_scheduler, timesteps):
+class EMA(nn.Cell):
     """
-    Computes SNR as per
-    https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L847-L849
+    Args:
+        updates: number of ema updates, which can be restored from resumed training.
     """
-    alphas_cumprod = noise_scheduler.alphas_cumprod
-    sqrt_alphas_cumprod = alphas_cumprod**0.5
-    sqrt_one_minus_alphas_cumprod = (1.0 - alphas_cumprod) ** 0.5
 
-    # Expand the tensors.
-    # Adapted from https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L1026
-    sqrt_alphas_cumprod = sqrt_alphas_cumprod.to(device=timesteps.device)[timesteps].float()
-    while len(sqrt_alphas_cumprod.shape) < len(timesteps.shape):
-        sqrt_alphas_cumprod = sqrt_alphas_cumprod[..., None]
-    alpha = sqrt_alphas_cumprod.expand(timesteps.shape)
+    def __init__(self, network, ema_decay=0.9999, updates=0, trainable_only=True):
+        super().__init__()
+        # TODO: net.trainable_params() is more reasonable?
+        if trainable_only:
+            self.net_weight = ms.ParameterTuple(network.trainable_params())
+        else:
+            self.net_weight = ms.ParameterTuple(network.get_parameters())
+        self.ema_weight = self.net_weight.clone(prefix="ema", init="same")
+        self.ema_decay = ema_decay
+        self.updates = Parameter(Tensor(updates, ms.float32), requires_grad=False)
+        self.hyper_map = ops.HyperMap()
 
-    sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod.to(device=timesteps.device)[timesteps].float()
-    while len(sqrt_one_minus_alphas_cumprod.shape) < len(timesteps.shape):
-        sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[..., None]
-    sigma = sqrt_one_minus_alphas_cumprod.expand(timesteps.shape)
-
-    # Compute SNR.
-    snr = (alpha / sigma) ** 2
-    return snr
+    def ema_update(self):
+        """Update EMA parameters."""
+        self.updates += 1
+        d = self.ema_decay * (1 - ops.exp(-self.updates / 2000))
+        # update trainable parameters
+        success = self.hyper_map(ops.partial(_ema_op, d), self.ema_weight, self.net_weight)
+        self.updates = ops.depend(self.updates, success)
+        return self.updates

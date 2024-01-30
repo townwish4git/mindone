@@ -3,7 +3,7 @@ model:
     target: gm.models.diffusion.DiffusionEngine
     params:
         scale_factor: 0.13025
-        disable_first_stage_amp: True
+        disable_first_stage_amp: False
 
         denoiser_config:
             target: gm.modules.diffusionmodules.denoiser.DiscreteDenoiser
@@ -33,7 +33,7 @@ model:
                 use_linear_in_transformer: True
                 transformer_depth: [1, 2, 10]  # note: the first is unused (due to attn_res starting at 2) 32, 16, 8 --> 64, 32, 16
                 context_dim: 2048
-                spatial_transformer_attn_type: vanilla  # vanilla, flash-attention
+                spatial_transformer_attn_type: flash-attention  # vanilla, flash-attention
                 legacy: False
                 use_recompute: True
 
@@ -48,7 +48,7 @@ model:
                     params:
                       layer: hidden
                       layer_idx: 11
-                      version: /lgsl_data/zhy/models--openai--clip-vit-large-patch14/snapshots/8d052a0f05efbaefbc9e8786ba291cfdf93e5bff
+                      version: openai/clip-vit-large-patch14
                       # pretrained: ''
                   # crossattn and vector cond
                   - is_trainable: False
@@ -110,32 +110,29 @@ model:
 
         loss_fn_config:
             target: gm.modules.diffusionmodules.loss.StandardDiffusionLoss
-            params:
-                offset_noise_level: 0.1
 
 
 optim:
-    base_learning_rate: 1.0e-6
+    base_learning_rate: 1.0e-5
 
     optimizer_config:
         target: mindspore.nn.AdamWeightDecay  # mindspore.nn.SGD
         params:
             beta1: 0.9
-            beta2: 0.999
+            beta2: 0.98
             weight_decay: 0.01
 
 
 data:
-    per_batch_size: 2
-    total_step: 50000
+    per_batch_size: 1
+    total_step: 100000
     num_parallel_workers: 2
     python_multiprocessing: False
     shuffle: True
 
     dataset_config:
-        target: gm.data.dataset_wds.T2I_Webdataset_RndAcs
+        target: gm.data.dataset.Text2ImageDataset
         params:
-            caption_key: 'text_english'
             target_size: 1024
             transforms:
                 - target: gm.data.mappers.Resize
@@ -146,7 +143,6 @@ data:
                   params:
                     isfloat: False
                 - target: gm.data.mappers.AddOriginalImageSizeAsTupleAndCropToSquare
-                - target: gm.data.mappers.RandomHorizontalFlip
                 - target: gm.data.mappers.Transpose
                   params:
                     type: hwc2chw

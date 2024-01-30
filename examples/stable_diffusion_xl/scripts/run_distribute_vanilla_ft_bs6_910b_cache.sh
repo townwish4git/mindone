@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ $# != 6 ]
+if [ $# != 5 ]
 then
   echo "For Multiple Devices In Single/Multiple Machine"
   echo "Usage Help: bash run_distribute.sh [RANK_TABLE_FILE] [RANK_START] [RANK_END] [RANK_SIZE] [DATASET_PATH]"
@@ -13,17 +13,14 @@ START_DEVICE=$2
 END_DEVICE=$3
 RANK_SIZE=$4
 DATASET_PATH=$5
-TASK_NAME_AND_SERVER_ID=$6
 
 export HCCL_CONNECT_TIMEOUT=7200
 export RANK_TABLE_FILE=$RANK_TABLE_FILE
 export RANK_SIZE=$RANK_SIZE
 export DEVICE_NUM=$(($END_DEVICE - $START_DEVICE))
-export LD_PRELOAD=/usr/local/python3.7.5/lib/python3.7/site-packages/torch/lib/libgomp-d22c30c5.so.1:$LD_PRELOAD
 
-test -d ./logs_for_distribute/$TASK_NAME_AND_SERVER_ID || mkdir -p ./logs_for_distribute/$TASK_NAME_AND_SERVER_ID
-test -d ./runs/$TASK_NAME_AND_SERVER_ID || mkdir -p ./runs/$TASK_NAME_AND_SERVER_ID
-env > logs_for_distribute/$TASK_NAME_AND_SERVER_ID/env.log
+test -d ./logs_for_distribute || mkdir ./logs_for_distribute
+env > logs_for_distribute/env.log
 
 for((i=${START_DEVICE}; i<${END_DEVICE}; i++))
 do
@@ -31,12 +28,17 @@ do
   export DEVICE_ID=$((i-START_DEVICE))
   echo "start training for rank $RANK_ID, device $DEVICE_ID"
   python train.py \
-    --config configs/training/sd_xl_base_finetune_910b.yaml \
-    --weight checkpoints/sd_xl_base_1.0_ms.ckpt \
+    --config configs/training/sd_xl_base_finetune_910b_fa.yaml \
+    --weight checkpoints/sd_xl_base_1.0_vaefix_ms.ckpt \
     --data_path $DATASET_PATH \
     --save_path_with_time False \
     --max_device_memory "59GB" \
-    --cache_dir "this is for webdataset/wids dataset" \
-    --save_path "./runs/$TASK_NAME_AND_SERVER_ID" \
-    --is_parallel True > logs_for_distribute/$TASK_NAME_AND_SERVER_ID/log_$i.txt 2>&1 &
+    --param_fp16 True \
+    --per_batch_size 6 \
+    --data_sink True \
+    --sink_size 100 \
+    --cache_latent True \
+    --cache_text_embedding True \
+    --cache_path ./cache_data \
+    --is_parallel True > logs_for_distribute/log_$i.txt 2>&1 &
 done
