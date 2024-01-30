@@ -17,7 +17,8 @@ SAMPLER="EulerAncestralSampler"
 TASK_TYPE="txt2img"
 SAMPLE_STEP=20
 SEED=0
-NUM_REPEAT=4
+NUM_ROWS=1
+NUM_COLS=1
 
 
 # ==================================
@@ -33,13 +34,6 @@ mkdir -p $demo_save_path
 cd $tmp_dir
 
 
-while IFS= read -r line; do
-    for ((i=0; i<$NUM_REPEAT; i++)); do
-        echo "$line" >> $demo_save_path/seed_mul_prompts.txt
-    done
-done < "$PROMPTS"
-
-
 # ==================================
 # 4. 推理
 # ==================================
@@ -52,20 +46,6 @@ python $sdxl_dir/demo/sampling_without_streamlit.py \
 --seed $SEED \
 --prompt "$demo_save_path/seed_mul_prompts.txt" \
 --device_target Ascend \
---save_path $demo_save_path
-
-
-# ==================================
-# 5. 多图拼接和收尾工作
-# ==================================
-original_path="$demo_save_path/txt2img/SDXL-base-1.0"
-prompts_length=$(wc -l < $PROMPTS)
-concated_path="$demo_save_path/txt2img/concat"
-test -d $concated_path || mkdir -p $concated_path
-
-if [ $(($NUM_REPEAT)) -gt 1 ]; then
-    python demo/concat_pics.py $original_path $NUM_REPEAT $concated_path
-    rm -rf $original_path
-fi
-
-rm -f $demo_save_path/seed_mul_prompts.txt
+--save_path $demo_save_path \
+--num_rows $NUM_ROWS \
+--num_cols $NUM_COLS

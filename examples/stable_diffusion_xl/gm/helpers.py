@@ -52,6 +52,7 @@ SD_XL_BASE_RATIOS = {
     "0.88": (960, 1088),
     "0.94": (960, 1024),
     "1.0": (1024, 1024),
+    "1.0_2048": (2048, 2048),
     "1.0_768": (768, 768),
     "1.0_512": (512, 512),
     "1.07": (1024, 960),
@@ -645,10 +646,21 @@ def embed_watermark(img):
     return img
 
 
-def perform_save_locally(save_path, samples):
+def concat_images(images: list, num_cols: int):
+    images = np.concatenate(images, axis=0)
+    _n, _c, _h, _w = images.shape
+    row, col = (int(_n / num_cols), num_cols) if _n % num_cols == 0 else (_n, 1)
+
+    images = images.reshape((row, col, _c, _h, _w)).transpose(2, 0, 3, 1, 4).reshape(1, _c, row * _h, col * _w)
+
+    return images
+
+
+def perform_save_locally(save_path, samples, num_cols=1):
     os.makedirs(os.path.join(save_path), exist_ok=True)
     base_count = len(os.listdir(os.path.join(save_path)))
     samples = embed_watermark(samples)
+    samples = concat_images(samples, num_cols=num_cols)
 
     for sample in samples:
         sample = 255.0 * sample.transpose(1, 2, 0)
