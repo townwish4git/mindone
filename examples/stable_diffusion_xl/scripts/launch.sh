@@ -26,6 +26,7 @@ SPECIFIC_PYTHON_ARGS=(
     "--max_grad_norm 1.0"
 )
 
+
 # ========================
 # 2. 参数解析
 # ========================
@@ -71,5 +72,6 @@ for ip in "${VALID_IPS[@]}"; do
     echo "bash ${sdxl_dir}/scripts/${SCRIPT_TO_RUN} ${rank_table_file} $(((${idx}-1)*8)) $((${idx}*8)) $((${length}*8)) ${DATASET_DIR} \"${TASK_NAME}\" ${ip} \"${python_args}\"" >> ${local_launch_script}
 
     # run training on each machine
+    echo "[${server}] Launching the training task."
     ssh "${USERNAME}@${server}" "sudo su -c 'docker exec -i ${DOCKER_CONTAINER} bash -c \"\$(cat ${local_launch_script})\"'"
 done
