@@ -20,6 +20,10 @@ train:
     batch_size: 8
     shuffle: True
     drop_remainder: True
+<<<<<<< HEAD
+=======
+    python_multiprocessing: False  # 910* doesn't support multiprocessing
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 
   optimizer:
     name: adamw

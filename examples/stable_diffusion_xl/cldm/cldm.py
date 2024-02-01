@@ -20,15 +20,35 @@ _logger = logging.getLogger(__name__)
 
 
 class ControlnetUnetModel(UNetModel):
+<<<<<<< HEAD
     def __init__(self, control_stage_config, guess_mode=False, strength=1.0, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+=======
+    def __init__(self, control_stage_config, guess_mode=False, strength=1.0, sd_locked=True, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if sd_locked:
+            for param in self.get_parameters():
+                param.requires_grad = False
+
+        # add controlnet init
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
         self.controlnet = instantiate_from_config(control_stage_config)
         self.control_scales = (
             [strength * (0.825 ** float(12 - i)) for i in range(13)] if guess_mode else ([strength] * 13)
         )
 
     def construct(self, x, timesteps=None, context=None, y=None, control=None, only_mid_control=False, **kwargs):
+<<<<<<< HEAD
+=======
+        """
+        x: latent image in shape [bs, z, H//4, W//4]
+        timesteps: in shape [bs]
+        context: text embedding [bs, seq_len, f]
+        control: control signal [bs, 3, H, W]
+        """
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
         hs = []
 
         t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
@@ -56,6 +76,10 @@ class ControlnetUnetModel(UNetModel):
         ):
             if control is not None:
                 h_c = c_celllist(h_c, emb_c, context)
+<<<<<<< HEAD
+=======
+                # add encoded hint with latent image encoded projected with conv2d
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
                 if guided_hint is not None:
                     h_c += guided_hint
                     guided_hint = None
@@ -104,7 +128,10 @@ class ControlNet(nn.Cell):
         conv_resample=True,
         dims=2,
         num_classes=None,
+<<<<<<< HEAD
         # use_checkpoint=False,
+=======
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
         use_fp16=False,
         num_heads=-1,
         num_head_channels=-1,
@@ -117,6 +144,7 @@ class ControlNet(nn.Cell):
         context_dim=None,  # custom transformer support
         n_embed=None,  # custom support for prediction of discrete ids into codebook of first stage vq model
         legacy=True,
+<<<<<<< HEAD
         disable_self_attentions=None,
         num_attention_blocks=None,
         disable_middle_self_attn=False,
@@ -125,6 +153,11 @@ class ControlNet(nn.Cell):
         # enable_flash_attention=False,
         # cross_frame_attention=False,
         # unet_chunk_size=2,
+=======
+        num_attention_blocks=None,
+        use_linear_in_transformer=False,
+        adm_in_channels=None,
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
     ):
         super().__init__()
 
@@ -186,7 +219,11 @@ class ControlNet(nn.Cell):
                         nn.SequentialCell(
                             [
                                 linear(model_channels, time_embed_dim),
+<<<<<<< HEAD
                                 nn.SiLU(),
+=======
+                                nn.SiLU().to_float(self.dtype),
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
                                 linear(time_embed_dim, time_embed_dim),
                             ]
                         ),
@@ -199,7 +236,11 @@ class ControlNet(nn.Cell):
                         nn.SequentialCell(
                             [
                                 linear(adm_in_channels, time_embed_dim),
+<<<<<<< HEAD
                                 nn.SiLU(),
+=======
+                                nn.SiLU().to_float(self.dtype),
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
                                 linear(time_embed_dim, time_embed_dim),
                             ]
                         )
@@ -257,9 +298,13 @@ class ControlNet(nn.Cell):
                             self.dropout,
                             out_channels=mult * model_channels,
                             dims=dims,
+<<<<<<< HEAD
                             # use_checkpoint=use_checkpoint,
                             use_scale_shift_norm=use_scale_shift_norm,
                             # dtype=self.dtype,
+=======
+                            use_scale_shift_norm=use_scale_shift_norm,
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
                         )
                     ]
                 )
@@ -277,7 +322,10 @@ class ControlNet(nn.Cell):
                         layers.append(
                             AttentionBlock(
                                 ch,
+<<<<<<< HEAD
                                 # use_checkpoint=use_checkpoint,
+=======
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
                                 num_heads=num_heads,
                                 num_head_channels=dim_head,
                                 use_new_attention_order=use_new_attention_order,
@@ -289,6 +337,7 @@ class ControlNet(nn.Cell):
                                 dim_head,
                                 depth=transformer_depth[level],
                                 context_dim=context_dim,
+<<<<<<< HEAD
                                 # use_checkpoint=use_checkpoint,
                                 # dtype=self.dtype,
                                 dropout=self.dropout,
@@ -296,6 +345,10 @@ class ControlNet(nn.Cell):
                                 # enable_flash_attention=enable_flash_attention,
                                 # cross_frame_attention=cross_frame_attention,
                                 # unet_chunk_size=unet_chunk_size,
+=======
+                                dropout=self.dropout,
+                                use_linear=use_linear_in_transformer,
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
                             )
                         )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
@@ -312,10 +365,15 @@ class ControlNet(nn.Cell):
                             self.dropout,
                             out_channels=out_ch,
                             dims=dims,
+<<<<<<< HEAD
                             # use_checkpoint=use_checkpoint,
                             use_scale_shift_norm=use_scale_shift_norm,
                             down=True,
                             # dtype=self.dtype,
+=======
+                            use_scale_shift_norm=use_scale_shift_norm,
+                            down=True,
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
                         )
                         if resblock_updown
                         else Downsample(ch, conv_resample, dims=dims, out_channels=out_ch)
@@ -347,6 +405,7 @@ class ControlNet(nn.Cell):
                 time_embed_dim,
                 self.dropout,
                 dims=dims,
+<<<<<<< HEAD
                 # use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
                 # dtype=self.dtype,
@@ -354,6 +413,12 @@ class ControlNet(nn.Cell):
             AttentionBlock(
                 ch,
                 # use_checkpoint=use_checkpoint,
+=======
+                use_scale_shift_norm=use_scale_shift_norm,
+            ),
+            AttentionBlock(
+                ch,
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
                 num_heads=num_heads,
                 num_head_channels=dim_head,
                 use_new_attention_order=use_new_attention_order,
@@ -365,6 +430,7 @@ class ControlNet(nn.Cell):
                 dim_head,
                 depth=transformer_depth[level],
                 context_dim=context_dim,
+<<<<<<< HEAD
                 # use_checkpoint=use_checkpoint,
                 # dtype=self.dtype,
                 dropout=self.dropout,
@@ -372,15 +438,23 @@ class ControlNet(nn.Cell):
                 # enable_flash_attention=enable_flash_attention,
                 # cross_frame_attention=cross_frame_attention,
                 # unet_chunk_size=unet_chunk_size,
+=======
+                dropout=self.dropout,
+                use_linear=use_linear_in_transformer,
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
             ),
             ResBlock(
                 ch,
                 time_embed_dim,
                 self.dropout,
                 dims=dims,
+<<<<<<< HEAD
                 # use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
                 # dtype=self.dtype,
+=======
+                use_scale_shift_norm=use_scale_shift_norm,
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
             ),
         )
         self.middle_block_out = self.make_zero_conv(ch)
@@ -392,6 +466,7 @@ class ControlNet(nn.Cell):
                 conv_nd(self.dims, channels, channels, 1, padding=0, has_bias=True, pad_mode="pad").to_float(self.dtype)
             )
         )
+<<<<<<< HEAD
 
     def construct(self, x, hint, timesteps, context, **kwargs):
         t_emb = timestep_embedding(timesteps, self.model_channels, repeat_only=False)
@@ -416,3 +491,5 @@ class ControlNet(nn.Cell):
         outs.append(self.middle_block_out(h, emb, context))
 
         return outs
+=======
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))

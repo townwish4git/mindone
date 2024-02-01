@@ -80,7 +80,18 @@ integrate and use.
 For more information on inference and training with T2I-Adapters, please refer
 to [T2I-Adapter](../t2i_adapter/README.md) page.
 
+<<<<<<< HEAD
 ### 4. Support List
+=======
+### 4. Inference with ControlNet
+
+[ControlNet](https://arxiv.org/abs/2302.05543) controls pretrained large diffusion models to support additional input conditions. The ControlNet learns task-specific conditions in an end-to-end way, and the learning is robust even when the training dataset is small. Large diffusion models like Stable Diffusion can be augmented with ControlNets to enable conditional inputs like canny edge maps, segmentation maps, keypoints, etc.
+
+For more information about ControlNet, please refer to [ControlNet](controlnet.md) page.
+
+
+### 5. Support List
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 
 <div align="center">
 

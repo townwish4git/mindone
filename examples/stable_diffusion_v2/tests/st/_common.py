@@ -3,7 +3,11 @@ import glob
 import os
 import sys
 
+<<<<<<< HEAD
 sys.path.append(".")
+=======
+sys.path.insert(0, ".")
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 
 from tools.eval.fid.utils import Download
 

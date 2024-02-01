@@ -14,7 +14,11 @@ def create_optimizer(
     params: Union[List[Parameter], List[dict]],
     name: str,
     lr: Union[float, List[float]],
+<<<<<<< HEAD
     betas: List[float] = None,
+=======
+    betas: Optional[List[float]] = None,
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
     weight_decay: float = 1e-6,
     eps: float = 1e-6,
     group_strategy: Optional[str] = None,
@@ -43,12 +47,26 @@ def create_optimizer(
         _logger.info("Applying `%s` strategy for weight decay.", group_strategy)
 
     def decay_filter(param):
+<<<<<<< HEAD
         if group_strategy is not None and group_strategy.lower() == "unclip":
             # set decay of embedding to 0 should be beneficial for most of the cases
             filter_list = ["layernorm", "bias", "label_emb", "time_embed", "emb_layers"]
         else:
             # filter norm and bias
             filter_list = [".gamma", ".beta", ".bias"]
+=======
+        if group_strategy is None:
+            filter_list = ["layernorm", "bias"]
+        elif group_strategy.lower() == "unclip":
+            # set decay of embedding to 0 should be beneficial for most of the cases
+            filter_list = ["gamma", "beta", "bias", "label_emb", "time_embed", "emb_layers"]
+        elif group_strategy.lower() == "norm_and_bias":
+            # filter norm and bias
+            filter_list = ["gamma", "beta", "bias"]
+        else:
+            raise ValueError(f"Unsupported group_strategy: `{group_strategy}`")
+
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
         return all([x not in param.name.lower() for x in filter_list])
 
     param_optimizer = params

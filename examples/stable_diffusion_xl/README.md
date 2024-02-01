@@ -9,6 +9,10 @@ This folder contains [Stable Diffusion XL (SDXL)](https://arxiv.org/abs/2307.019
 - [x] Infer: Support 7 SoTA diffusion process samplers.
 - [x] Infer: Support with MSLite.
 - [x] Infer: Support T2I-Adapters for Text-to-Image generation with extra visual guidance.
+<<<<<<< HEAD
+=======
+- [x] Infer: Support [ControlNet](https://arxiv.org/abs/2302.05543) inference with SDXL-1.0-Base.
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 - [x] (⚠️experimental) Finetune: [LoRA](https://arxiv.org/abs/2106.09685) fine-tune with SDXL-1.0-Base.
 - [x] (⚠️experimental) Finetune: [DreamBooth](https://arxiv.org/abs/2208.12242) lora fine-tune with SDXL-1.0-Base.
 - [x] (⚠️experimental) Finetune: [Textual Inversion](https://arxiv.org/abs/2208.01618) fine-tune with SDXL-1.0-Base.
@@ -34,6 +38,12 @@ This folder contains [Stable Diffusion XL (SDXL)](https://arxiv.org/abs/2307.019
 
 ## What is New
 
+<<<<<<< HEAD
+=======
+**Jan 30, 2024**
+1. Add [ControlNet](controlnet.md) inference support for SDXL
+
+>>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 **Jan 18, 2024**
 1. Support latent/text-embedding cache.
 2. Support vanilla fine-tune with PerBatchSize of 6 on 910*.
