@@ -92,6 +92,9 @@ class Text2ImageDataset:
         # images preprocess
         image_path = self.local_images[idx]
         image = Image.open(image_path)
+        # PIL image format: (w, h)
+        original_size = [image.height, image.width]
+        image = self.shrink_pixels(image, 18000000)
         image = exif_transpose(image)
         if not image.mode == "RGB":
             image = image.convert("RGB")
@@ -108,7 +111,7 @@ class Text2ImageDataset:
         sample = {
             "image": image,
             "txt": caption,
-            "original_size_as_tuple": np.array([image.shape[0], image.shape[1]]),  # original h, original w
+            "original_size_as_tuple": np.array(original_size, np.int32),  # original h, original w
             "target_size_as_tuple": np.array([self.target_size[0], self.target_size[1]]),  # target h, target w
             "crop_coords_top_left": np.array([0, 0]),  # crop top, crop left
             "aesthetic_score": np.array(
@@ -189,6 +192,16 @@ class Text2ImageDataset:
                 filted_images.append(image)
                 filted_captions.append(caption)
         return filted_images, filted_captions
+
+    @staticmethod
+    def shrink_pixels(image, max_pixels):
+        max_pixels = max(max_pixels, 16)
+        h, w = image.height, image.width
+        while h * w > max_pixels:
+            h //= 2
+            w //= 2
+        image = image.resize(size=(w, h))  # Pillow Image shape should be (weight, height)
+        return image
 
 
 class Text2ImageDatasetDreamBooth:
