@@ -241,8 +241,6 @@ class DDPM(nn.Cell):
             + extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
         )
 
-<<<<<<< HEAD
-=======
     def predict_start_from_z_and_v(self, x_t, t, v):
         return (
             extract_into_tensor(self.sqrt_alphas_cumprod, t, x_t.shape) * x_t
@@ -255,7 +253,6 @@ class DDPM(nn.Cell):
             + extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_t.shape) * x_t
         )
 
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 
 class LatentDiffusion(DDPM):
     def __init__(

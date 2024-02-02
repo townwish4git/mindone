@@ -154,10 +154,7 @@ if __name__ == "__main__":
     parser.add_class_arguments(nn.DynamicLossScaleUpdateCell, "LossScale", instantiate=False, fail_untyped=False)
 
     cfg = parser.parse_args()
-<<<<<<< HEAD
-=======
     cfg.pop("config")  # not needed anymore after instantiation
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
     init = parser.instantiate_classes(cfg)
 
     main(cfg, init)

@@ -161,8 +161,6 @@ def decode(output_ids: Tensor):
     return _tokenizer.decode(output_ids)
 
 
-<<<<<<< HEAD
-=======
 def lpw_tokenize(
     texts: Union[str, List[str]],
     context_length: int = 77,
@@ -211,7 +209,6 @@ def lpw_tokenize(
     return prompt_tokens, prompt_tokens_length
 
 
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 def tokenize(texts: Union[str, List[str]], context_length: int = 77) -> [np.ndarray, np.ndarray]:
     """
     Returns the tokenized representation of given input string(s)

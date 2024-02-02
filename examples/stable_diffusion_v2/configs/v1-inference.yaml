@@ -30,11 +30,7 @@ model:
         channel_mult: [ 1, 2, 4, 4 ]
         num_heads: 8 # num of attention head, => head dim will be 320 / 8 = 40, not divisable by 16
         use_spatial_transformer: True
-<<<<<<< HEAD
-        enable_flash_attention: True
-=======
         enable_flash_attention: False
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
         fa_max_head_dim: 256  # max head dim of flash attention. In case of oom, reduce it to 128
         transformer_depth: 1
         context_dim: 768

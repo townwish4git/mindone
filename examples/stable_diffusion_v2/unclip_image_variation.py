@@ -17,10 +17,7 @@ import mindspore.ops as ops
 
 workspace = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(workspace)
-<<<<<<< HEAD
-=======
 from ldm.models.diffusion.ddim import DDIMSampler
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 from ldm.models.diffusion.dpm_solver import DPMSolverSampler
 from ldm.modules.logger import set_logger
 from ldm.modules.lora import inject_trainable_lora
@@ -220,11 +217,6 @@ def main(args):
     logger.info(f"Prediction type: {prediction_type}")
 
     # create sampler
-<<<<<<< HEAD
-    # TODO: currently we support DPM only
-    sampler = DPMSolverSampler(model, "dpmsolver", prediction_type=prediction_type)
-    sname = "dpm_solver"
-=======
     if args.ddim:
         sampler = DDIMSampler(model)
         sname = "ddim"
@@ -234,7 +226,6 @@ def main(args):
     else:
         sampler = DPMSolverSampler(model, "dpmsolver++", prediction_type=prediction_type)
         sname = "dpm_solver_pp"
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 
     # log
     key_info = "Key Settings:\n" + "=" * 50 + "\n"
@@ -407,8 +398,6 @@ if __name__ == "__main__":
         help="image width, in pixel space",
     )
     parser.add_argument(
-<<<<<<< HEAD
-=======
         "--ddim",
         action="store_true",
         help="use ddim sampling",
@@ -419,7 +408,6 @@ if __name__ == "__main__":
         help="use dpm_solver sampling",
     )
     parser.add_argument(
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
         "--scale",
         type=float,
         default=None,

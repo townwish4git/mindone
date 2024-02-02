@@ -9,13 +9,8 @@ GLOBAL_MAPPING = {
 }
 
 PARAMS_MAPPING = {
-<<<<<<< HEAD
-    "model.diffusion_model.label_emb.0.0": "add_embedding.linear_1",  # keys found in mindone sdxl weight, not found in mindone control+sdxl weight
-    "model.diffusion_model.label_emb.0.2": "add_embedding.linear_2",  # keys found in mindone sdxl weight, not found in mindone control+sdxl weight
-=======
     "model.diffusion_model.controlnet.label_emb.0.0": "add_embedding.linear_1",
     "model.diffusion_model.controlnet.label_emb.0.2": "add_embedding.linear_2",
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
     "model.diffusion_model.controlnet.input_hint_block.0": "controlnet_cond_embedding.conv_in",
     "model.diffusion_model.controlnet.input_hint_block.2": "controlnet_cond_embedding.blocks.0",
     "model.diffusion_model.controlnet.input_hint_block.4": "controlnet_cond_embedding.blocks.1",

@@ -18,10 +18,7 @@ def init_env(
     debug: bool = False,
     seed: int = 42,
     distributed: bool = False,
-<<<<<<< HEAD
-=======
     device_target: Optional[str] = "Ascend",
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
     enable_modelarts: bool = False,
     num_workers: int = 1,
     json_data_path: Optional[str] = None,
@@ -53,11 +50,7 @@ def init_env(
         device_id = int(os.getenv("DEVICE_ID"))
         ms.set_context(
             mode=mode,
-<<<<<<< HEAD
-            device_target="Ascend",
-=======
             device_target=device_target,
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
             device_id=device_id,
             ascend_config={"precision_mode": "allow_fp32_to_fp16"},  # Only effective on Ascend 901B
         )
@@ -85,11 +78,7 @@ def init_env(
         rank_id = 0
         ms.set_context(
             mode=mode,
-<<<<<<< HEAD
-            device_target="Ascend",
-=======
             device_target=device_target,
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
             device_id=device_id,
             ascend_config={"precision_mode": "allow_fp32_to_fp16"},  # Only effective on Ascend 901B
             pynative_synchronize=debug,

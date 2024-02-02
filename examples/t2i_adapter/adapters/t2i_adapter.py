@@ -328,13 +328,7 @@ class CombinedAdapter(nn.Cell):
                     feature_map[j] + feat * self._weights[i] for j, feat in enumerate(self._adapters[i](conds[i]))
                 ]
 
-<<<<<<< HEAD
-            # TODO: in the original implementation adapter features are applied to both
-            #  unconditional and conditional guidance
-            feature_map = [ops.cat((feat, feat)).astype(self._out_cast) for feat in feature_map]
-=======
             feature_map = [feat.astype(self._out_cast) for feat in feature_map]
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 
         if self._style_ids:
             feature_seq = [self._adapters[i](conds[i]) * self._weights[i] for i in self._style_ids]

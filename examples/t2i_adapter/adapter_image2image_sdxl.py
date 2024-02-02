@@ -12,11 +12,6 @@ from omegaconf import OmegaConf
 from PIL import Image
 from t2i_utils import read_images
 
-<<<<<<< HEAD
-from mindspore import ops
-
-=======
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 sys.path.append("../stable_diffusion_v2/")
 sys.path.append("../stable_diffusion_xl/")
 from common import init_env
@@ -117,11 +112,6 @@ def main(args):
     # infer
     conds, img_shape = read_images(cond_paths, min(h, w))
     adapter_features, _ = adapters(conds)
-<<<<<<< HEAD
-    # FIXME: do not conduct operations on tensors outside of `construct`!
-    adapter_features = [ops.concat([af] * args.n_samples) for af in adapter_features]
-=======
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 
     value_dict = prepare_infer_dict(
         img_shape, args.crop_coords_top_left, args.aesthetic_score, args.negative_aesthetic_score

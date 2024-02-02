@@ -186,8 +186,6 @@ Take SD 2.0 as an example:
 # Use SD 2.0 instead and add negative prompt guidance to eliminate artifacts
 python text_to_image.py --prompt "elven forest" -v 2.0 --negative_prompt "moss" --scale 9.0 --seed 42
 ```
-<<<<<<< HEAD
-=======
 
 ##### Distributed Inference
 
@@ -203,7 +201,6 @@ python text_to_image.py --prompt "elven forest" -v 2.0 --negative_prompt "moss" 
    ```
    > Note: Parallel inference only can be used for mutilple-prompt.
 
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 <details>
 
   <summary>Long Prompts Support</summary>
@@ -221,8 +218,6 @@ python text_to_image.py --prompt "elven forest" -v 2.0 --negative_prompt "moss" 
   ```
 </details>
 
-<<<<<<< HEAD
-=======
 <details>
 
   <summary>Flash-Attention Support</summary>
@@ -241,7 +236,6 @@ python text_to_image.py --prompt "elven forest" -v 2.0 --negative_prompt "moss" 
 
 </details>
 
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 Here are some generation results.
 
 <div align="center">

@@ -211,11 +211,8 @@ class DiffusionEngine(nn.Cell):
         amp_level="O0",
         init_latent_path=None,  # '/path/to/sdxl_init_latent.npy'
         control: Optional[Tensor] = None,
-<<<<<<< HEAD
-=======
         lpw=False,
         max_embeddings_multiples=4,
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
     ):
         print("Sampling")
 
@@ -244,11 +241,8 @@ class DiffusionEngine(nn.Cell):
             batch,
             batch_uc=batch_uc,
             force_uc_zero_embeddings=force_uc_zero_embeddings,
-<<<<<<< HEAD
-=======
             lpw=lpw,
             max_embeddings_multiples=max_embeddings_multiples,
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
         )
         print("Embedding Done.")
 
@@ -306,11 +300,8 @@ class DiffusionEngine(nn.Cell):
         filter=None,
         add_noise=True,
         amp_level="O0",
-<<<<<<< HEAD
-=======
         lpw=False,
         max_embeddings_multiples=4,
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
     ):
         dtype = ms.float32 if amp_level not in ("O2", "O3") else ms.float16
 
@@ -331,11 +322,8 @@ class DiffusionEngine(nn.Cell):
             batch,
             batch_uc=batch_uc,
             force_uc_zero_embeddings=force_uc_zero_embeddings,
-<<<<<<< HEAD
-=======
             lpw=lpw,
             max_embeddings_multiples=max_embeddings_multiples,
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
         )
         print("Embedding Done.")
 
@@ -530,8 +518,6 @@ class DiffusionEngineDreamBooth(DiffusionEngine):
         return loss, overflow
 
 
-<<<<<<< HEAD
-=======
 class DiffusionEngineControlNet(DiffusionEngine):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -602,7 +588,6 @@ class DiffusionEngineControlNet(DiffusionEngine):
         return loss, overflow
 
 
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 class DiffusionEngineMultiGraph(DiffusionEngine):
     def __init__(self, **kwargs):
         network_config = kwargs.pop("network_config", None)

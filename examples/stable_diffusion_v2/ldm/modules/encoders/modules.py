@@ -195,10 +195,7 @@ class FrozenOpenCLIPEmbedder(FrozenCLIPEmbedder):
         self.dtype = ms.float16 if use_fp16 else ms.float32
         self.context_length = context_length
         self.tokenizer = get_tokenizer(tokenizer_name)
-<<<<<<< HEAD
-=======
         self.tokenizer_name = tokenizer_name
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
         setattr(self.tokenizer, "context_length", context_length)
 
         self.model = OpenClipTextEncoder(

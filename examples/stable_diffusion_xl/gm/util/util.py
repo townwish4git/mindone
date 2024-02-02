@@ -1,10 +1,7 @@
 import importlib
 import random
 from inspect import isfunction
-<<<<<<< HEAD
-=======
 from typing import List, Optional, Union
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
 
 import numpy as np
 
@@ -224,8 +221,6 @@ def auto_mixed_precision(network, amp_level="O0"):
     else:
         raise ValueError("The amp level {} is not supported".format(amp_level))
     return network
-<<<<<<< HEAD
-=======
 
 
 def pad_tokens(tokens, max_length, bos, eos, pad, no_boseos_middle=True, chunk_length=77):
@@ -293,4 +288,3 @@ def get_text_index(
     )
     prompt_tokens = np.array(prompt_tokens, np.int32)
     return prompt_tokens, prompt_tokens_length
->>>>>>> 52f11f6 (fix unclip inference and add ddim v-pred support (#332))
