@@ -41,14 +41,14 @@ test -d $sdxl_dir/scripts/cmds/$TASK_NAME || mkdir -p $sdxl_dir/scripts/cmds/$TA
 # ========================
 # 3. 生成rank table配置文件
 # ========================
-# 请提前在tools/rank_table/envs中准备好：集群内各单机的rank table json配置文件
-# 可在单机上通过 python3 tools/rank_table/hccl_tools.py 生成
-hccl_path="${sdxl_dir}/tools/rank_table/envs"
+# 请提前在tools/rank_table_generation/envs中准备好：集群内各单机的rank table json配置文件
+# 可在单机上通过 python3 tools/rank_table_generation/hccl_tools.py 生成
+hccl_path="${sdxl_dir}/tools/rank_table_generation/envs"
 args=""
 for ip in "${VALID_IPS[@]}"; do 
     args+=" ${hccl_path}/hccl_8p_01234567_${IP_PREFIX}.${ip}.json"
 done
-python3 $sdxl_dir/tools/rank_table/merge_hccl.py $args "${sdxl_dir}/scripts/cmds/${TASK_NAME}"
+python3 $sdxl_dir/tools/rank_table_generation/merge_hccl_with_save_pth.py $args "${sdxl_dir}/scripts/cmds/${TASK_NAME}"
 rank_table_file="${sdxl_dir}/scripts/cmds/${TASK_NAME}/hccl_${length}s_$((${length}*8))p.json"
 
 
