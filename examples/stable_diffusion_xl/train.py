@@ -56,6 +56,55 @@ def get_parser_train():
     parser.add_argument("--per_batch_size", type=int, default=None)
     parser.add_argument("--scale_lr", type=ast.literal_eval, default=False)
     parser.add_argument(
+        "--timestep_bias_strategy",
+        type=str,
+        default=None,
+        choices=["earlier", "later", "range"],
+        help=(
+            "The timestep bias strategy, which may help direct the model toward learning low or high frequency details."
+            " Choices: ['earlier', 'later', 'range', 'none']."
+            " The default is 'none', which means no bias is applied, and training proceeds normally."
+            " The value of 'later' will increase the frequency of the model's final training timesteps."
+        ),
+    )
+    parser.add_argument(
+        "--timestep_bias_multiplier",
+        type=float,
+        default=1.0,
+        help=(
+            "The multiplier for the bias. Defaults to 1.0, which means no bias is applied."
+            " A value of 2.0 will double the weight of the bias, and a value of 0.5 will halve it."
+        ),
+    )
+    parser.add_argument(
+        "--timestep_bias_begin",
+        type=int,
+        default=0,
+        help=(
+            "When using `--timestep_bias_strategy=range`, the beginning (inclusive) timestep to bias."
+            " Defaults to zero, which equates to having no specific bias."
+        ),
+    )
+    parser.add_argument(
+        "--timestep_bias_end",
+        type=int,
+        default=1000,
+        help=(
+            "When using `--timestep_bias_strategy=range`, the final timestep (inclusive) to bias."
+            " Defaults to 1000, which is the number of timesteps that Stable Diffusion is trained on."
+        ),
+    )
+    parser.add_argument(
+        "--timestep_bias_portion",
+        type=float,
+        default=0.25,
+        help=(
+            "The portion of timesteps to bias. Defaults to 0.25, which 25% of timesteps will be biased."
+            " A value of 0.5 will bias one half of the timesteps. The value provided for `--timestep_bias_strategy` determines"
+            " whether the biased portions are in the earlier or later timesteps."
+        ),
+    )
+    parser.add_argument(
         "--snr_gamma",
         default=None,
         type=float,
@@ -87,7 +136,7 @@ def get_parser_train():
         "--dataset_load_tokenizer", type=ast.literal_eval, default=True, help="create dataset with tokenizer"
     )
     parser.add_argument("--lpw", type=ast.literal_eval, default=False)
-    parser.add_argument("--max_embeddings_multiples", type=int, default=4, help="control the length of long prompts")
+    parser.add_argument("--max_embeddings_multiples", type=int, default=3, help="control the length of long prompts")
 
     # args for infer
     parser.add_argument("--infer_during_train", type=ast.literal_eval, default=False)
@@ -126,7 +175,6 @@ def get_parser_train():
         default="/cache/pretrain_ckpt/",
         help="ModelArts: local device path to checkpoint folder",
     )
-
     return parser
 
 
@@ -178,6 +226,10 @@ def train(args):
     random.seed(args.seed)  # for multi_aspect
 
     # 4. Create train step func
+    assert "sigma_sampler_config" in config.model.params
+    num_timesteps = config.model.params.sigma_sampler_config.num_idx
+    timestep_bias_weighting = generate_timestep_weights(args, num_timesteps)
+
     assert "optim" in config
     scaler = (
         args.rank_size * dataloader.get_batch_size() * args.gradient_accumulation_steps
@@ -209,6 +261,7 @@ def train(args):
 
     if args.ms_mode == 1:
         # Pynative Mode
+        assert args.timestep_bias_strategy is None, "Not support timestep bias strategy."
         assert args.snr_gamma is None, "Not supports snr_gamma."
         assert isinstance(model.model, nn.Cell)
         train_step_fn = partial(
@@ -236,6 +289,7 @@ def train(args):
                 enable_first_stage_model=not args.cache_latent,
                 enable_conditioner=not args.cache_text_embedding,
                 ema=ema,
+                timestep_bias_weighting=timestep_bias_weighting,
                 snr_gamma=args.snr_gamma,
             )
             train_step_fn = auto_mixed_precision(train_step_fn, amp_level=args.ms_amp_level)
@@ -248,6 +302,7 @@ def train(args):
             assert args.version == "SDXL-base-1.0", "Only supports sdxl-base."
             assert args.task == "txt2img", "Only supports text2img task."
             assert args.optimizer_weight is None, "Not supports load optimizer weight."
+            assert args.timestep_bias_strategy is None, "Not support timestep bias strategy."
             assert args.snr_gamma is None, "Not supports snr_gamma."
             assert (model.stage1 is not None) and (model.stage2 is not None)
             optimizer1 = get_optimizer(
@@ -306,7 +361,9 @@ def train_txt2img(
             data = {k: (Tensor(v, dtype) if k != "txt" else v.tolist()) for k, v in data.items()}
 
             image = data[model.input_key]
-            tokens, _ = model.conditioner.tokenize(data, lpw=args.lpw)
+            tokens, _ = model.conditioner.tokenize(
+                data, lpw=args.lpw, max_embeddings_multiples=args.max_embeddings_multiples
+            )
             tokens = [Tensor(t) for t in tokens]
 
         # Train a step
@@ -366,7 +423,6 @@ def train_txt2img(
                 model=model,
                 prompt="Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
                 save_path=os.path.join(args.save_path, "txt2img/", f"step_{i+1}_rank_{args.rank}"),
-                lpw=args.lpw,
             )
             print(f"Step {i + 1}/{total_step}, infer done.", flush=True)
 
@@ -568,6 +624,47 @@ def cache_data(args):
             s_time = time.time()
 
     print(f"Rank {args.rank + 1}/{args.rank_size}, Cache sample {total_num}, Done.")
+
+
+def generate_timestep_weights(args, num_timesteps):
+    weights = np.ones(num_timesteps)
+
+    # Determine the indices to bias
+    num_to_bias = int(args.timestep_bias_portion * num_timesteps)
+
+    if args.timestep_bias_strategy == "later":
+        bias_indices = slice(-num_to_bias, None)
+    elif args.timestep_bias_strategy == "earlier":
+        bias_indices = slice(0, num_to_bias)
+    elif args.timestep_bias_strategy == "range":
+        # Out of the possible 1000 timesteps, we might want to focus on eg. 200-500.
+        range_begin = args.timestep_bias_begin
+        range_end = args.timestep_bias_end
+        if range_begin < 0:
+            raise ValueError(
+                "When using the range strategy for timestep bias, you must provide a beginning timestep greater or equal to zero."
+            )
+        if range_end > num_timesteps:
+            raise ValueError(
+                "When using the range strategy for timestep bias, you must provide an ending timestep smaller than the number of timesteps."
+            )
+        bias_indices = slice(range_begin, range_end)
+    else:  # None or any other string
+        return None
+    if args.timestep_bias_multiplier <= 0:
+        raise ValueError(
+            "The parameter --timestep_bias_multiplier is not intended to be used to disable the training of specific timesteps."
+            " If it was intended to disable timestep bias, use `--timestep_bias_strategy none` instead."
+            " A timestep bias multiplier less than or equal to 0 is not allowed."
+        )
+
+    # Apply the bias
+    weights[bias_indices] *= args.timestep_bias_multiplier
+
+    # Normalize
+    weights /= weights.sum()
+
+    return Tensor(weights, ms.float32)
 
 
 if __name__ == "__main__":
