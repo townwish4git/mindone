@@ -859,7 +859,7 @@ class FrozenCLIPEmbedderTeleOpenCLIP(AbstractEmbModel):
         for _, p in self.parameters_and_names():
             p.requires_grad = False
 
-    def tokenize(self, text):
+    def tokenize(self, text, **kwargs):
         batch_encoding = self.tokenizer(
             text,
             truncation=True,
@@ -939,7 +939,7 @@ class FrozenOpenCLIPEmbedder2TeleOpenCLIP(AbstractEmbModel):
             raise NotImplementedError()
         self.legacy = legacy
 
-    def tokenize(self, text):
+    def tokenize(self, text, **kwargs):
         batch_encoding = self.tokenizer(
             text,
             truncation=True,
@@ -1053,7 +1053,7 @@ class FrozenCnCLIPEmbedder(AbstractEmbModel):
         for _, p in self.parameters_and_names():
             p.requires_grad = False
 
-    def tokenize(self, text):
+    def tokenize(self, text, **kwargs):
         batch_encoding = self.tokenizer(
             text,
             truncation=True,
@@ -1130,7 +1130,7 @@ class FrozenTeleCnCLIPEmbedder2(AbstractEmbModel):
         for _, p in self.parameters_and_names():
             p.requires_grad = False
 
-    def tokenize(self, text):
+    def tokenize(self, text, **kwargs):
         batch_encoding = self.tokenizer(
             text,
             truncation=True,
