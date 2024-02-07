@@ -126,8 +126,7 @@ def get_parser_train():
         help="Max number of ckpts saved. If exceeds, delete the oldest one. Set None: keep all ckpts.",
     )
     parser.add_argument("--save_ckpt_only_once", type=ast.literal_eval, default=False)
-    parser.add_argument("--cache_dir", type=str, default="./")
-    parser.add_argument("--server_ip", type=str, default="")
+    parser.add_argument("--cache_dir", type=str, default="")
     parser.add_argument("--optimizer_weight", type=str, default=None, help="load optimizer weight")
     parser.add_argument("--save_optimizer", type=ast.literal_eval, default=False, help="enable save optimizer")
     parser.add_argument("--data_sink", type=ast.literal_eval, default=False)
@@ -198,8 +197,8 @@ def train(args):
         model.model.set_train(True)  # only unet
 
     # cache_dir
-    if args.server_ip and "T2I_Webdataset_RndAcs" in config.data.dataset_config["target"]:
-        config.data.dataset_config["params"]["cache_dir"] = os.path.join(args.cache_dir, args.server_ip)
+    if args.cache_dir and "T2I_Webdataset_RndAcs" in config.data.dataset_config["target"]:
+        config.data.dataset_config["params"]["cache_dir"] = args.cache_dir
     # 3. Create dataloader
     assert "data" in config
     per_batch_size = config.data.pop("per_batch_size")
@@ -227,7 +226,7 @@ def train(args):
 
     # 4. Create train step func
     assert "sigma_sampler_config" in config.model.params
-    num_timesteps = config.model.params.sigma_sampler_config.num_idx
+    num_timesteps = config.model.params.sigma_sampler_config.params.num_idx
     timestep_bias_weighting = generate_timestep_weights(args, num_timesteps)
 
     assert "optim" in config

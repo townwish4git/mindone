@@ -54,5 +54,6 @@ do
     --save_path_with_time False \
     --max_device_memory "59GB" \
     --is_parallel True \
+    --cache_dir "/lgsl_data/_wids_cache/${SERVER_ID}" \
     > $sdxl_dir/logs_for_distribute/$TASK_NAME/$SERVER_ID/log_$DEVICE_ID.txt 2>&1 &
 done
