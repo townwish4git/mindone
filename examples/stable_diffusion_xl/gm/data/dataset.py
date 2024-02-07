@@ -30,6 +30,7 @@ class Text2ImageDataset:
         prompt_empty_probability=0.0,
         lpw=False,
         max_embeddings_multiples=4,
+        max_pixels=18000000,
     ):
         super().__init__()
         self.tokenizer = tokenizer
@@ -69,6 +70,7 @@ class Text2ImageDataset:
         self.local_captions = all_captions
         self.lpw = lpw
         self.max_embeddings_multiples = max_embeddings_multiples
+        self.max_pixels = max_pixels
 
         self.transforms = []
         if transforms:
@@ -92,9 +94,8 @@ class Text2ImageDataset:
         # images preprocess
         image_path = self.local_images[idx]
         image = Image.open(image_path)
-        # PIL image format: (w, h)
         original_size = [image.height, image.width]
-        image = self.shrink_pixels(image, 18000000)
+        image = self.shrink_pixels(image, self.max_pixels)
         image = exif_transpose(image)
         if not image.mode == "RGB":
             image = image.convert("RGB")
@@ -197,10 +198,15 @@ class Text2ImageDataset:
     def shrink_pixels(image, max_pixels):
         max_pixels = max(max_pixels, 16)
         h, w = image.height, image.width
+
+        need_shrink = False
         while h * w > max_pixels:
             h //= 2
             w //= 2
-        image = image.resize(size=(w, h))  # Pillow Image shape should be (weight, height)
+            need_shrink = True
+            
+        image = image.resize(size=(w, h)) if need_shrink else image
+
         return image
 
 
