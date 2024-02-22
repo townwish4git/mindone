@@ -13,6 +13,7 @@ import webdataset as wds
 import wids
 from gm.util import instantiate_from_config
 from PIL import Image
+from tqdm import tqdm
 
 from mindspore.communication import get_group_size, get_rank
 
@@ -46,8 +47,20 @@ def generate_sharlist(data_dir):
         "wids_version": 1,
         "shardlist": [],
     }
-    for tf in tar_files:
-        nsamples = get_tar_nsample(tf)
+    print("INFO: Start to scan tar files...")
+    # TODO: 1) use multi-process. 2) consider multiple machine access.
+    for tf in tqdm(tar_files):
+        tar_info_fp = tf.replace(".tar", ".txt")
+        if not os.path.exists(tar_info_fp):
+            # scan
+            nsamples = get_tar_nsample(tf)
+
+            with open(tar_info_fp, "w") as fp:
+                fp.write(str(nsamples))
+        else:
+            with open(tar_info_fp, "r") as fp:
+                nsamples = int(fp.read())
+
         out["shardlist"].append({"url": tf, "nsamples": nsamples})
     save_fp = os.path.join(data_dir, "data_info.json")
     with open(save_fp, "w") as fp:
@@ -259,14 +272,18 @@ class T2I_Webdataset(T2I_BaseDataset):
         super().__init__(*args, **kwargs)
 
         data_path = kwargs.get("data_path")
-        # num_samples = kwargs.get("num_samples")
+        num_samples = kwargs.get("num_samples", -1)
 
         tar_files = get_tar_file_list(data_path)
         print(f"Get {len(tar_files)} tar files")
 
-        # get number of samples in shard
+        # get number of samples
+        if num_samples == -1:
+            tot_samples = get_num_samples(shardlist_desc, data_path)
+        else:
+            tot_samples = num_samples
+
         # Change the epoch to return the given number of samples, determine by total samples and rank
-        tot_samples = get_num_samples(shardlist_desc, data_path)
         rank_id, device_num = get_device_rank_info()
         samples_per_rank = math.ceil(tot_samples / device_num)
         print(

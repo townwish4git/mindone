@@ -29,9 +29,10 @@ os.environ["WIDS_VERBOSE"] = "1"
 
 
 def test_src_dataset(target="T2I_Webdataset"):
-    data_path = "datasets/telecom_ori"
+    # data_path = "datasets/telecom_ori"
     # data_path = "datasets/custom"
     # shardlist_desc = "datasets/custom/data_info.json"
+    data_path = "datasets/multi_tars"
 
     transforms = [
         {"target": "gm.data.mappers.Resize", "params": {"size": 1024, "interpolation": 3}},
