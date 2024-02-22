@@ -91,9 +91,7 @@ version: /lgsl_data/zhy/models--openai--clip-vit-large-patch14/snapshots/8d052a0
 
 #### 2. 单机rank_table文件（仅训练需要）
 
-我们已经在`/lgsl_data/twx/rank_table_files`准备好了集群内所有单机`rank_table`配置文件，您需要在训练开始前将这些配置文件复制至`stable_diffusion_xl/tools/rank_table/envs`路径下。
-
-后续训练阶段训练脚本会自动从该路径搜索对应机器的`rank_table`文件，并将训练集群内所有机器的配置文件融合，生成训练需要的集群配置。
+我们已经在`/lgsl_data/twx/rank_table_files`准备好了集群内所有单机`rank_table`配置文件，将训练脚本中的参数`HCCL_PATH`指定为该路径，后续训练阶段训练脚本会自动从该路径搜索对应机器的`rank_table`文件，并将训练集群内所有机器的配置文件融合，生成训练需要的集群配置。
 
 
 #### 3. Diffsuers/Stability-AI权重转为MindONE权重（如有需要）
@@ -160,6 +158,7 @@ python train.py \
 1. **USERNAME**：ssh登录的用户名，当前集群为`lgsl`
 2. **DOCKER_CONTAINER**：训练脚本运行环境对应容器名，当前集群为`mindspore1212`
 3. **IP_PREFIX**：集群内网ip前缀，当前集群为：`192.168.203`
+4. **HCCL_PATH**：包含集群内所有单机`rank_table`配置文件的目录路径
 
 **训练参数设置**：当您切换训练任务时候，重点关注此部分参数的切换。包括：
 

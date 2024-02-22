@@ -6,6 +6,7 @@
 USERNAME="User Name (e.g. root/lgsl)"
 DOCKER_CONTAINER="Docker Container Name (e.g. mindspore）"
 IP_PREFIX="Network ID (e.g. 192.168.203)"
+HCCL_PATH="path/to/hccl/files"
 
 # 训练参数设置 [启动训练任务请做相应修改]
 TASK_NAME="Name of Your Training Task"
@@ -41,12 +42,11 @@ test -d $sdxl_dir/scripts/cmds/$TASK_NAME || mkdir -p $sdxl_dir/scripts/cmds/$TA
 # ========================
 # 3. 生成rank table配置文件
 # ========================
-# 请提前在tools/rank_table_generation/envs中准备好：集群内各单机的rank table json配置文件
+# 请提前在HCCL_PATH中准备好：集群内各单机的rank table json配置文件
 # 可在单机上通过 python3 tools/rank_table_generation/hccl_tools.py 生成
-hccl_path="${sdxl_dir}/tools/rank_table_generation/envs"
 args=""
 for ip in "${VALID_IPS[@]}"; do 
-    args+=" ${hccl_path}/hccl_8p_01234567_${IP_PREFIX}.${ip}.json"
+    args+=" ${HCCL_PATH}/hccl_8p_01234567_${IP_PREFIX}.${ip}.json"
 done
 python3 $sdxl_dir/tools/rank_table_generation/merge_hccl_with_save_pth.py $args "${sdxl_dir}/scripts/cmds/${TASK_NAME}"
 rank_table_file="${sdxl_dir}/scripts/cmds/${TASK_NAME}/hccl_${length}s_$((${length}*8))p.json"
