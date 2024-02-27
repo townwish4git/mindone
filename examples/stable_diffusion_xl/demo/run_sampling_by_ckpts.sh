@@ -4,7 +4,7 @@
 export MS_PYNATIVE_GE=1
 
 START_DEVICE_ID=0  # 指定使用的NPU集群起始编号
-END_DEVICE_ID=7  # 指定使用的NPU集群终止编号
+END_DEVICE_ID=8  # 指定使用的NPU集群终止编号
 export DEVICE_ID=$START_DEVICE_ID  
 
 
@@ -39,6 +39,7 @@ for ckpt in ${CKPT_FILE[@]}; do
     sdxl_dir="$(dirname "$(dirname "$(readlink -f "$0")")")"
     ckpt_filename=$(echo "${ckpt}" | awk -F'/' '{print $NF}')
     demo_save_path=$sdxl_dir/demo/$SAMPLING_TASK_NAME/${ckpt_filename}@${SAMPLER}@${SAMPLE_STEP}steps
+    tmp_dir=$sdxl_dir/tmp/$SAMPLING_TASK_NAME/${ckpt_filename}@${SAMPLER}@${SAMPLE_STEP}steps
     test -d $demo_save_path && demo_save_path=${demo_save_path}@$(date +'%Y-%m-%d-%H:%M:%S')
     test -d $tmp_dir || mkdir -p $tmp_dir
     mkdir -p $demo_save_path
@@ -62,14 +63,14 @@ for ckpt in ${CKPT_FILE[@]}; do
     --num_rows $NUM_ROWS \
     --num_cols $NUM_COLS \
     --sd_xl_base_ratios $RATIO \
-    &
+    > $demo_save_path/log.txt 2>&1 &
 
 
     # ==================================
     # (3) 更新DEVICE_ID
     # ==================================
     NEW_DEVICE_ID=$(($DEVICE_ID + 1))
-    if [ "$NEW_DEVICE_ID" -gt "$END_DEVICE_ID" ]; then
+    if [ "$NEW_DEVICE_ID" == "$END_DEVICE_ID" ]; then
         NEW_DEVICE_ID=$START_DEVICE_ID
         wait
     fi

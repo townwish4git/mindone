@@ -45,8 +45,9 @@ python $sdxl_dir/demo/sampling_without_streamlit.py \
 --sampler $SAMPLER \
 --sample_step $SAMPLE_STEP \
 --seed $SEED \
---prompt "$demo_save_path/seed_mul_prompts.txt" \
+--prompt "$PROMPTS" \
 --device_target Ascend \
 --save_path $demo_save_path \
 --num_rows $NUM_ROWS \
---num_cols $NUM_COLS
+--num_cols $NUM_COLS \
+> $demo_save_path/log.txt 2>&1
