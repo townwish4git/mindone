@@ -505,7 +505,6 @@ class BertModel(BertPreTrainedModel):
 
 
 class TeleBertModel(BertPreTrainedModel):
-
     def __init__(self, config, extra_config):
         super().__init__(config)
 

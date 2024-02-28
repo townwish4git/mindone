@@ -5,7 +5,7 @@ export MS_PYNATIVE_GE=1
 
 START_DEVICE_ID=0  # 指定使用的NPU集群起始编号
 END_DEVICE_ID=8  # 指定使用的NPU集群终止编号
-export DEVICE_ID=$START_DEVICE_ID  
+export DEVICE_ID=$START_DEVICE_ID
 
 
 # ==================================
@@ -73,7 +73,7 @@ for ckpt in ${LORA_CKPT_FILE[@]}; do
         --num_cols $NUM_COLS \
         --sd_xl_base_ratios $RATIO \
         > $demo_save_path/log.txt 2>&1 &
-        
+
 
         # ==================================
         # (3) 更新DEVICE_ID

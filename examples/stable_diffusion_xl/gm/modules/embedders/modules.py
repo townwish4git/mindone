@@ -821,6 +821,7 @@ class FrozenOpenCLIPEmbedder2_CLIPTokenizer(FrozenOpenCLIPEmbedder2):
 # tele: openclip
 # ================
 
+
 class FrozenCLIPEmbedderTeleOpenCLIP(AbstractEmbModel):
     """Uses the CLIP transformer encoder for text (from huggingface)"""
 
@@ -1008,6 +1009,7 @@ class FrozenOpenCLIPEmbedder2TeleOpenCLIP(AbstractEmbModel):
 # tele: chinese-clip
 # ==================
 
+
 class FrozenCnCLIPEmbedder(AbstractEmbModel):
     """Uses the Bert transformer encoder for text (from huggingface)"""
 
@@ -1151,7 +1153,7 @@ class FrozenTeleCnCLIPEmbedder2(AbstractEmbModel):
             z = last_hidden_state
         else:
             z = hidden_states[self.layer_idx]
-        return z , last_hidden_state[:, 0, :]
+        return z, last_hidden_state[:, 0, :]
 
     def embedding(self, input_ids):
         return self.transformer(input_ids=input_ids)

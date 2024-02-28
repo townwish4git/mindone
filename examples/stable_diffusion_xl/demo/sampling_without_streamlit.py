@@ -4,8 +4,9 @@ import ast
 import os
 import sys
 import time
-import numpy as np
 from functools import partial
+
+import numpy as np
 
 sys.path.append(".")
 sys.path.append("..")
@@ -192,7 +193,7 @@ def run_txt2img(
     for i, prompt in enumerate(prompts):
         images = []
         for j in range(num_samples):
-            np.random.seed(args.seed + j) # set seed for every sample
+            np.random.seed(args.seed + j)  # set seed for every sample
             print(f"[{i+1}/{len(prompts)}]: sampling prompt: ", value_dict["prompt"], f"({j+1}/{num_samples})")
             value_dict["prompt"] = prompt
             s_time = time.time()

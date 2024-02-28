@@ -210,7 +210,7 @@ SPECIFIC_PYTHON_ARGS=(
 ```shell
 # 0. (仅第一次训练需要)将需要的rank_table文件复制至stable_diffusion_xl/tools/rank_table/envs路径下
 cp /lgsl_data/twx/rank_table_files/* path/to/stable_diffusion_xl/tools/rank_table/envs
-# 1. 配置configs/training/<training_task_config>.yaml文件;修改 scripts/launch.sh脚本 
+# 1. 配置configs/training/<training_task_config>.yaml文件;修改 scripts/launch.sh脚本
 # 2. 前往root@02机器，当前仅此账户可以免密登录其余机器；如有需要也可以自行配置ssh免密登录
 ssh -p 22 -o ConnectTimeout=1800 lgsl@192.168.203.3
 sudo su

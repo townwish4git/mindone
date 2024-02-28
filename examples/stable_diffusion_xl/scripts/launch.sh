@@ -45,7 +45,7 @@ test -d $sdxl_dir/scripts/cmds/$TASK_NAME || mkdir -p $sdxl_dir/scripts/cmds/$TA
 # 请提前在HCCL_PATH中准备好：集群内各单机的rank table json配置文件
 # 可在单机上通过 python3 tools/rank_table_generation/hccl_tools.py 生成
 args=""
-for ip in "${VALID_IPS[@]}"; do 
+for ip in "${VALID_IPS[@]}"; do
     args+=" ${HCCL_PATH}/hccl_8p_01234567_${IP_PREFIX}.${ip}.json"
 done
 python3 $sdxl_dir/tools/rank_table_generation/merge_hccl_with_save_pth.py $args "${sdxl_dir}/scripts/cmds/${TASK_NAME}"
@@ -62,12 +62,12 @@ for ip in "${VALID_IPS[@]}"; do
         continue
     fi
 
-    start_device=$((($idx - 1) * 8)) 
+    start_device=$((($idx - 1) * 8))
     end_device=$(($idx * 8))
     server="${IP_PREFIX}.${ip}"
     local_launch_script="${sdxl_dir}/scripts/cmds/${TASK_NAME}/vf_bash_${ip}.sh"
     python_args="${specific_python_args} --save_path ./runs/${TASK_NAME}/${ip}"
-    
+
     echo "export HCCL_CONNECT_TIMEOUT=7200" >> ${local_launch_script}
     echo "bash ${sdxl_dir}/scripts/${SCRIPT_TO_RUN} ${rank_table_file} $(((${idx}-1)*8)) $((${idx}*8)) $((${length}*8)) ${DATASET_DIR} \"${TASK_NAME}\" ${ip} \"${python_args}\"" >> ${local_launch_script}
 

@@ -5,7 +5,7 @@ export MS_PYNATIVE_GE=1
 
 START_DEVICE_ID=0  # 指定使用的NPU集群起始编号
 END_DEVICE_ID=8  # 指定使用的NPU集群终止编号
-export DEVICE_ID=$START_DEVICE_ID  
+export DEVICE_ID=$START_DEVICE_ID
 
 
 # ==================================

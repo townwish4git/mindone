@@ -3,7 +3,7 @@
 ## 步骤
 
 1. 进入docker container环境
-2. `bash path/to/sampling/script` 
+2. `bash path/to/sampling/script`
 
 关于bash运行的推理脚本，目前有以下几种
 
