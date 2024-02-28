@@ -355,7 +355,7 @@ def train_txt2img(
     s_time = time.time()
     ckpt_queue = []
     for i, data in enumerate(loader):
-        if i + args.resume_step > total_step:
+        if i > total_step - args.resume_step:
             break
         i += args.resume_step
         if args.dataset_load_tokenizer or args.cache_text_embedding:
