@@ -1,4 +1,5 @@
 import importlib
+import os
 import random
 from inspect import isfunction
 from typing import List, Optional, Union
@@ -295,3 +296,38 @@ def get_text_index(
     )
     prompt_tokens = np.array(prompt_tokens, np.int32)
     return prompt_tokens, prompt_tokens_length
+
+
+def parse_prompts_argument(prompts_or_prompts_file, key=None):
+    if not os.path.exists(prompts_or_prompts_file):
+        return [prompts_or_prompts_file]
+
+    prompts = []
+    information = (
+        f"[INFO] argument 'key' is '{key}', you may want to check if the value of key matches your expectations."
+        if key
+        else "[WARNING] argument 'key' is None, which may invalidate the prompts file reading."
+    )
+    if prompts_or_prompts_file.endswith(".txt"):
+        with open(prompts_or_prompts_file, "r") as f:
+            prompts += f.read().splitlines()
+    elif prompts_or_prompts_file.endswith(".csv"):
+        import csv
+
+        print(information, flush=True)
+
+        with open(prompts_or_prompts_file, newline="") as csvfile:
+            prompts_table = csv.DictReader(csvfile, delimiter=",")
+            prompts += filter(lambda x: x is not None, [row.get(key) for row in prompts_table])
+    elif prompts_or_prompts_file.endswith(".json"):
+        from json import load as jsonload
+
+        print(information, flush=True)
+
+        with open(prompts_or_prompts_file, "r") as jsonf:
+            json_lists = jsonload(jsonf)
+            prompts += filter(lambda x: x is not None, [row.get(key) for row in json_lists])
+    else:
+        raise NotImplementedError(f"Prompt file {prompts_or_prompts_file} should be .txt/.csv/.json format.")
+
+    return prompts

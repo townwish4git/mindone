@@ -15,7 +15,7 @@ if os.environ.get("MS_PYNATIVE_GE") != "1":
 
 from cldm.util import get_control
 from gm.helpers import SD_XL_BASE_RATIOS, VERSION2SPECS, create_model, init_sampling, load_img, perform_save_locally
-from gm.util import seed_everything
+from gm.util import parse_prompts_argument, seed_everything
 from gm.util.long_prompt import do_sample as do_sample_long_prompts
 from omegaconf import OmegaConf
 
@@ -51,6 +51,7 @@ def get_parser_sample():
     parser.add_argument(
         "--prompt", type=str, default="Astronaut in a jungle, cold color palette, muted colors, detailed, 8k"
     )
+    parser.add_argument("--prompts_key", type=str, default=None, help="key for prompts file of CSV/JSON to fetch value")
 
     parser.add_argument("--negative_prompt", type=str, default="")
     parser.add_argument("--support_long_prompts", type=ast.literal_eval, default=False)
@@ -154,12 +155,7 @@ def run_txt2img(
     C = version_dict["C"]
     F = version_dict["f"]
 
-    prompts = []
-    if os.path.exists(args.prompt):
-        with open(args.prompt, "r") as f:
-            prompts = f.read().splitlines()
-    else:
-        prompts = [args.prompt]
+    prompts = parse_prompts_argument(args.prompt, args.prompts_key)
 
     num_samples = args.num_rows * args.num_cols
     control = None
