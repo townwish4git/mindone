@@ -103,7 +103,11 @@ class CenterCrop:
         self.key = key
 
     def __call__(self, sample: Dict):
+        sample_key = sample[self.key]
+        y = max(0, int((sample_key.shape[0] - self.size) / 2.0))
+        x = max(0, int((sample_key.shape[1] - self.size) / 2.0))
         sample[self.key] = self.center_crop_op(sample[self.key])
+        sample["crop_coords_top_left"] = np.array([y, x], np.int32)
         return sample
 
 
