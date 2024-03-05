@@ -101,6 +101,7 @@ class CenterCrop:
     def __init__(self, key: str = "image", size: Union[int, List] = 256):
         self.center_crop_op = ms.dataset.transforms.vision.CenterCrop(size)
         self.key = key
+        self.size = size
 
     def __call__(self, sample: Dict):
         sample_key = sample[self.key]
