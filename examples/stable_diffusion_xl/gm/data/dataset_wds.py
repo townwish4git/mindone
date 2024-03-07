@@ -316,7 +316,7 @@ class T2I_Webdataset(T2I_BaseDataset):
         num_samples = kwargs.get("num_samples", -1)
 
         tar_files = get_tar_file_list(data_path)
-        print(f"Get {len(tar_files)} tar files, flush=True")
+        print(f"Get {len(tar_files)} tar files", flush=True)
 
         # get number of samples
         if num_samples == -1:
