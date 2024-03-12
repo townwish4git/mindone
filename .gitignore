@@ -141,3 +141,9 @@ download.txt
 *hf*.py
 *torch*.py
 *.txt
+
+runs/
+logs_for_distribute/
+*.png
+tmp/
+**/scripts/cmds
