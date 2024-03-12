@@ -20,6 +20,7 @@ CKPT_FILE=(
 CONFIG_FILE="path/to/sdxl/configs/inference/sd_xl_base.yaml"
 PROMPTS="Prompts lists text file, one row = one prompt"
 SAMPLER="EulerAncestralSampler"
+DISCRETIZATION="LegacyDDPMDiscretization"  # EDMDiscretization
 TASK_TYPE="txt2img"
 RATIO="1.0"
 SAMPLE_STEP=20
@@ -56,6 +57,7 @@ for ckpt in ${CKPT_FILE[@]}; do
     --weight $ckpt \
     --sampler $SAMPLER \
     --sample_step $SAMPLE_STEP \
+    --discretization $DISCRETIZATION \
     --seed $SEED \
     --prompt "$PROMPTS" \
     --device_target Ascend \

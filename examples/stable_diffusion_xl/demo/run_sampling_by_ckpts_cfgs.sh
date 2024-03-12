@@ -25,6 +25,7 @@ CONFIG_FILE=(
 )
 PROMPTS="Prompts lists text file, one row = one prompt"
 SAMPLER="EulerAncestralSampler"
+DISCRETIZATION="LegacyDDPMDiscretization"  # EDMDiscretization
 TASK_TYPE="txt2img"
 RATIO="1.0"
 SAMPLE_STEP=20
@@ -65,6 +66,7 @@ for ckpt in ${LORA_CKPT_FILE[@]}; do
         --weight ${BASE_CKPT},${ckpt} \
         --sampler $SAMPLER \
         --sample_step $SAMPLE_STEP \
+        --discretization $DISCRETIZATION \
         --seed $SEED \
         --prompt "$PROMPTS" \
         --device_target Ascend \

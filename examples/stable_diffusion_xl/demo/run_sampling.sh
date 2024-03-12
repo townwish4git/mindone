@@ -13,6 +13,7 @@ CKPT_FILE="CKPT file to load, use comma(,) to separate multiple .ckpt files"
 CONFIG_FILE="path/to/sdxl/configs/inference/sd_xl_base.yaml"
 PROMPTS="Prompts lists text file, one row = one prompt"
 SAMPLER="EulerAncestralSampler"
+DISCRETIZATION="LegacyDDPMDiscretization"  # EDMDiscretization
 TASK_TYPE="txt2img"
 RATIO="1.0"
 SAMPLE_STEP=20
@@ -44,6 +45,7 @@ python $sdxl_dir/demo/sampling_without_streamlit.py \
 --weight $CKPT_FILE \
 --sampler $SAMPLER \
 --sample_step $SAMPLE_STEP \
+--discretization $DISCRETIZATION \
 --seed $SEED \
 --prompt "$PROMPTS" \
 --device_target Ascend \
