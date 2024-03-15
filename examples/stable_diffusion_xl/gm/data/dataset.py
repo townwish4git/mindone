@@ -1,7 +1,7 @@
+import copy
 import os
 import random
 import time
-import copy
 
 import imagesize
 import numpy as np
@@ -129,7 +129,8 @@ class Text2ImageDataset:
 
             if not _is_valid_text_input(caption):
                 print(
-                    f"WARNING: text input must of type `str`, but got type: {type(caption)}, caption: {caption}", flush=True
+                    f"WARNING: text input must of type `str`, but got type: {type(caption)}, caption: {caption}",
+                    flush=True,
                 )
 
                 caption = str(caption)
@@ -168,6 +169,13 @@ class Text2ImageDataset:
             return sample
 
         except Exception as e:
+            try:
+                image_path = self.local_images[idx]
+                caption = self.local_captions[idx]
+                print(f"[Damaged samples] image_path: {image_path}, caption: {caption}")
+            except Exception as e:
+                pass
+
             print(
                 f"=> WARNING: Fail to get sample {idx}. The sample can be corrupted and will be replaced by previous normal sample."
             )
