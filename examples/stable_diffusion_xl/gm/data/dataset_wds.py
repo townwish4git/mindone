@@ -287,10 +287,10 @@ def get_num_samples(shardlist_desc=None, data_path=None):
     if shardlist_desc is None:
         assert data_path is not None
         if not os.path.exists(os.path.join(data_path, "data_info.json")):
-            print("Scanning tar files to get sample nums...", flush=True)
-            # TODO: only scan tar files whose url/name is not in the shardlist description
-            shardlist_desc = generate_sharlist(data_path)
-            print("=> Saved shardlist json file in ", shardlist_desc, flush=True)
+            shardlist_desc_file = os.path.join(data_path, "data_info.json")
+            raise FileNotFoundError(
+                f"{shardlist_desc_file} not found, please prepare dataset meta info before training"
+            )
         else:
             shardlist_desc = os.path.join(data_path, "data_info.json")
     print("Loading sharlist description from: ", shardlist_desc, flush=True)
@@ -401,7 +401,6 @@ class T2I_Webdataset(T2I_BaseDataset):
             except StopIteration:
                 raise StopIteration
             except Exception as e:
-                
                 # Print damaged samples
                 caption = None
                 try:
@@ -440,9 +439,10 @@ class T2I_Webdataset_RndAcs(T2I_BaseDataset):
         if shardlist_desc is None:
             data_path = kwargs.get("data_path")
             if not os.path.exists(os.path.join(data_path, "data_info.json")):
-                print("Scanning tar files to get sample nums...", flush=True)
-                shardlist_desc = generate_sharlist(data_path)
-                print("=> Saved shardlist json file in ", shardlist_desc, flush=True)
+                shardlist_desc_file = os.path.join(data_path, "data_info.json")
+                raise FileNotFoundError(
+                    f"{shardlist_desc_file} not found, please prepare dataset meta info before training"
+                )
             else:
                 shardlist_desc = os.path.join(data_path, "data_info.json")
         print("Loading sharlist description from: ", shardlist_desc, flush=True)
