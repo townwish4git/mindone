@@ -969,7 +969,7 @@ def main():
             # Get the most recent checkpoint
             dirs = os.listdir(args.output_dir)
             dirs = [d for d in dirs if d.startswith("checkpoint")]
-            dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
+            dirs = sorted(dirs, key=lambda x: int(x.split("-")[1].split(".")[0]))
             path = dirs[-1] if len(dirs) > 0 else None
 
         if path is None:
