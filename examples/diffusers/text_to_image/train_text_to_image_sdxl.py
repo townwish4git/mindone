@@ -573,6 +573,9 @@ def generate_timestep_weights(args, num_timesteps):
                 "When using the range strategy for timestep bias, you must provide an ending timestep smaller than the number of timesteps."
             )
         bias_indices = slice(range_begin, range_end)
+        num_to_bias = range_end - range_begin
+        if range_end < 0:
+            num_to_bias += num_timesteps
     else:  # 'none' or any other string
         return weights
     if args.timestep_bias_multiplier <= 0:
@@ -583,7 +586,7 @@ def generate_timestep_weights(args, num_timesteps):
         )
 
     # Apply the bias
-    weights[bias_indices] *= args.timestep_bias_multiplier
+    weights[bias_indices] = ops.ones(num_to_bias) * args.timestep_bias_multiplier
 
     # Normalize
     weights /= weights.sum()
