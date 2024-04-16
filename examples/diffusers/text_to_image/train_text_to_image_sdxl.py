@@ -974,7 +974,7 @@ def main():
                 logger.info(f"Resuming from checkpoint {path}")
             state_dict = ms.load_checkpoint(os.path.join(args.output_dir, path))
             ms.load_param_into_net(unet, state_dict)  # todo: what about optimizer and scaler?
-            global_step = int(path.split("-")[1])
+            global_step = int(path.split("-")[1].split(".")[0])
 
             initial_global_step = global_step
             first_epoch = global_step // num_update_steps_per_epoch
@@ -1020,7 +1020,7 @@ def main():
                     if args.checkpoints_total_limit is not None:
                         checkpoints = os.listdir(args.output_dir)
                         checkpoints = [d for d in checkpoints if d.startswith("checkpoint")]
-                        checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
+                        checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1].split(".")[0]))
 
                         # before we save the new checkpoint, we need to have at _most_ `checkpoints_total_limit - 1` checkpoints
                         if len(checkpoints) >= args.checkpoints_total_limit:
