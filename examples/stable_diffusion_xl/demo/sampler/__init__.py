@@ -1,2 +1,2 @@
-from .sampler import Sampler
-from .schedulers import EulerDiscreteScheduler
+from .sampler import StableDiffusionXLSampler
+from .schedulers import EulerDiscreteScheduler, EulerDiscreteAncestralScheduler

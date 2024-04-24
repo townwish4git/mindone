@@ -11,7 +11,7 @@ from gm.helpers import get_batch, get_unique_embedder_keys_from_conditioner
 logger = logging.getLogger(__name__)
 
 
-class Sampler(nn.Cell):
+class StableDiffusionXLSampler(nn.Cell):
     def __init__(
             self,
             conditioner,
@@ -37,21 +37,21 @@ class Sampler(nn.Cell):
     
     def tokenize(self, batch, **kwargs):
         tokens, lengths = self.conditioner.tokenize(batch, **kwargs)
-        tokens = ops.concat([ms.Tensor(t) for t in tokens])
+        tokens = [ms.Tensor(t) for t in tokens]
         return tokens
     
-    def embedding(self, uc_tokens, c_tokens, force_zero_embeddings=None):
-        uc_tokens = ops.chunk(uc_tokens, 5)
-        c_tokens = ops.chunk(c_tokens, 5)
+    @ms.jit
+    def wrapped_conditioner(self, *tokens):
+        vector, crossattn, concat = self.conditioner.embedding(*tokens)
+        return vector, crossattn
 
-        uc_vector, uc_crossattn, uc_concat = self.conditioner(*uc_tokens)
-        c_vector, c_crossattn, c_concat = self.conditioner(*c_tokens)
+    def embedding(self, *tokens, force_zero_embeddings=None):
+        # use wrapped_conditioner decorated by mindspore.jit instead of decorate
+        # this function by mindspore.jit to avoid longer compilation time unexpectedly.
+        uc_vector, uc_crossattn = self.wrapped_conditioner(*tokens[:5])
+        c_vector, c_crossattn = self.wrapped_conditioner(*tokens[5:])
 
         if force_zero_embeddings is not None:
-            logger.warning(
-                "\'force_zero_embeddings\' is calling, and attention that:"
-                "so far, parameter \'force_zero_embeddings\' only supports \'txt\'."
-            )
             uc_vector[:, :1280] *= 0.0
             uc_crossattn *= 0.0
         
@@ -96,6 +96,10 @@ class Sampler(nn.Cell):
         batch, batch_uc = get_batch(
             get_unique_embedder_keys_from_conditioner(self.conditioner), value_dict, num_samples, dtype=dtype
         )
+        
+        # Get text tokens
+        uc_tokens = self.tokenize(batch_uc, lpw=lpw, max_embeddings_multiples=max_embeddings_multiples)
+        c_tokens = self.tokenize(batch, lpw=lpw, max_embeddings_multiples=max_embeddings_multiples)
 
         # Generate random noise
         shape = (np.prod(num_samples), C, H // F, W // F)
@@ -105,21 +109,21 @@ class Sampler(nn.Cell):
         else:
             randn = ms.Tensor(np.random.randn(*shape), ms.float32)
 
-        # Get text embeddings
-        uc_tokens = self.tokenize(batch_uc, lpw=lpw, max_embeddings_multiples=max_embeddings_multiples)
-        c_tokens = self.tokenize(batch, lpw=lpw, max_embeddings_multiples=max_embeddings_multiples)
-        vector, crossattn = self.embedding(uc_tokens, c_tokens, force_zero_embeddings=force_uc_zero_embeddings)
-
         # Sampling
         logger.info("Sample Starting...")
-        samples_x = self.sample(randn, vector, crossattn, None, force_zero_embeddings=force_uc_zero_embeddings)
+        samples_x = self.sample(randn, *(uc_tokens + c_tokens), force_zero_embeddings=force_uc_zero_embeddings)
         samples_x = samples_x.asnumpy()
         samples = np.clip((samples_x + 1.0) / 2.0, a_min=0.0, a_max=1.0)
         logger.info("Sample Done.")
 
         return samples
 
-    def sample(self, noise, vector, crossattn, concat, force_zero_embeddings=None):
-        latents = self.scheduler.sample(noise, vector, crossattn, concat)
+    def sample(self, noise, *tokens, force_zero_embeddings=None):
+        """
+        Sampling with several functions wrapped by mindspore.jit,
+        as pynative jit has a better performance than graph mode in this case.
+        """
+        vector, crossattn = self.embedding(*tokens, force_zero_embeddings=force_zero_embeddings)
+        latents = self.scheduler.sample(noise, vector, crossattn, None)
         imgs = self.latents_decode(latents)
         return imgs

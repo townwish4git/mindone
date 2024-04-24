@@ -30,7 +30,7 @@ from omegaconf import OmegaConf
 import mindspore as ms
 from mindspore import Tensor, ops
 
-from demo.sampler import Sampler, EulerDiscreteScheduler
+from demo.sampler import StableDiffusionXLSampler, EulerDiscreteScheduler
 
 
 def get_parser_sample():
@@ -250,7 +250,7 @@ def run_txt2img(
     }
 
     scheduler = EulerDiscreteScheduler(unet=model.model, num_sampling_steps=args.sample_step, cfg=args.guidance_scale,)
-    graph_sampler = Sampler(
+    graph_sampler = StableDiffusionXLSampler(
         conditioner=model.conditioner,
         vae=model.first_stage_model,
         scale_factor=model.scale_factor,
@@ -271,7 +271,6 @@ def run_txt2img(
             s_time = time.time()
             sampling_func = partial(do_sample_long_prompts, model) if args.support_long_prompts else graph_sampler.do_sample
             out = sampling_func(
-                sampler,
                 value_dict,
                 1,
                 H,
