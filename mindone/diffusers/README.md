@@ -104,6 +104,8 @@ Most base, utility and mixin class are available.
 ### Scheduler
 - [x] DDIMScheduler
 - [x] DDPMScheduler
+- [x] EDMDPMSolverMultistepScheduler
+- [x] EDMEulerScheduler
 - [x] EulerDiscreteScheduler
 
 ### Loader

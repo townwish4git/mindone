@@ -18,6 +18,8 @@ from ..utils import _LazyModule
 _import_structure = {
     "scheduling_ddim": ["DDIMScheduler"],
     "scheduling_ddpm": ["DDPMScheduler"],
+    "scheduling_edm_dpmsolver_multistep": ["EDMDPMSolverMultistepScheduler"],
+    "scheduling_edm_euler": ["EDMEulerScheduler"],
     "scheduling_euler_discrete": ["EulerDiscreteScheduler"],
     "scheduling_pndm": ["PNDMScheduler"],
     "scheduling_utils": ["KarrasDiffusionSchedulers", "SchedulerMixin"],
@@ -26,6 +28,8 @@ _import_structure = {
 if TYPE_CHECKING:
     from .scheduling_ddim import DDIMScheduler
     from .scheduling_ddpm import DDPMScheduler
+    from .scheduling_edm_dpmsolver_multistep import EDMDPMSolverMultistepScheduler
+    from .scheduling_edm_euler import EDMEulerScheduler
     from .scheduling_euler_discrete import EulerDiscreteScheduler
     from .scheduling_pndm import PNDMScheduler
     from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin

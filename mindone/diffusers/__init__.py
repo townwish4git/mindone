@@ -37,6 +37,8 @@ _import_structure = {
     "schedulers": [
         "DDIMScheduler",
         "DDPMScheduler",
+        "EDMDPMSolverMultistepScheduler",
+        "EDMEulerScheduler",
         "EulerDiscreteScheduler",
         "PNDMScheduler",
         "SchedulerMixin",
