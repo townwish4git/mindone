@@ -1121,7 +1121,7 @@ class MSPreTrainedModel(nn.Cell, ModuleUtilsMixin, PushToHubMixin):
             return state_dict_ms
 
         missing_keys, unexpected_keys = ms.load_param_into_net(
-            model, convert_state_dict(model, state_dict), strict_load=True
+            model, convert_state_dict(model, state_dict), strict_load=False
         )
         mismatched_keys, offload_index, error_msgs = [], 0, ""
         return model, missing_keys, unexpected_keys, mismatched_keys, offload_index, error_msgs
