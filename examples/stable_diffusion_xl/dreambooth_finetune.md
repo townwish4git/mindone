@@ -16,18 +16,18 @@ The `train_dreambooth.py` script implements DreamBooth finetune for SDXL based o
 
 Make sure the following frameworks are installed.
 
-- mindspore 2.1.0
+- mindspore 2.1.0 (Ascend 910) / mindspore 2.2.1 (Ascend 910*)
 - openmpi 4.0.3 (for distributed mode)
 
 Enter the `example/stable_diffusion_xl` folder and run
 
-```shell l
+```shell
 pip install -r requirement.txt
 ```
 
 #### Pretrained models
 
-Download the official pre-train weights from huggingface, convert the weights from `.safetensors` format to Mindspore `.ckpt` format, and put them to `./checkpoints/` folder. Please refer to SDXL [GETTING_STARTED.md](https://github.com/mindspore-lab/mindone/blob/master/examples/stable_diffusion_xl/GETTING_STARTED.md#convert-pretrained-checkpoint) for detailed steps.
+Download the official pre-train weights from huggingface, convert the weights from `.safetensors` format to Mindspore `.ckpt` format, and put them to `./checkpoints/` folder. Please refer to SDXL [weight_convertion.md](./weight_convertion.md) for detailed steps.
 
 #### Finetuning Dataset Preparation
 
@@ -68,19 +68,18 @@ Before running the fintune scripts `train_dreambooth.py`, please specify the arg
 * `--weight=/path/to/pretrained_model`
 * `--save_path=/path/to/save_models`
 
-Modify other arguments in the shell when running the command or the hyper-parameters in the config file `sd_xl_base_finetune_dreambooth_lora_910b.yaml` if needed.
+Modify other arguments in the shell when running the command or the hyper-parameters in the config file `sd_xl_base_finetune_dreambooth_lora_910*.yaml` if needed.
 
-Run with multiple NPUs (for example, 8) training using :
+Run with multiple NPUs (for example, 4) training using :
 
 ```shell
-mpirun --allow-run-as-root -n 8 python train.py \
+mpirun --allow-run-as-root -n 4 python train_dreambooth.py \
   --config configs/training/sd_xl_base_finetune_dreambooth_lora_910b.yaml \
   --weight checkpoints/sd_xl_base_1.0_ms.ckpt \
   --instance_data_path /path/to/finetuning_data \
   --instance_prompt "A photo of a sks dog" \
   --class_data_path /path/to/class_image \
   --class_prompt "A photo of a dog" \
-  --gradient_accumulation_steps 4 \
   --ms_mode 0 \
   --save_ckpt_interval 500 \
   --is_parallel True \
@@ -103,7 +102,10 @@ python train_dreambooth.py \
   --device_target Ascend
 ```
 
-Our implementation is trained with prior-preservation loss, which avoids overfitting and language drift. We first generate images using the pertained model with a class prompt, and input those data in parallel with our data during finetuning. The `num_class_images` in the arguments of `train_dreambooth.py`  specifies the number of class images for prior-preservation. If not enough images are present in `class_image_path`, additional images will be sampled with `class_prompt`. And you would need to relaunch the training using the command above when sampling is finished. It takes about 25 minutes to sample 50 class images on Ascend.
+Our implementation is trained with prior-preservation loss, which avoids overfitting and language drift. We first generate images using the pertained model with a class prompt, and input those data in parallel with our data during finetuning. The `num_class_images` in the arguments of `train_dreambooth.py`  specifies the number of class images for prior-preservation. If not enough images are present in `class_image_path`, additional images will be sampled with `class_prompt`. And you would need to relaunch the training using the command above when sampling is finished. It takes about 25 minutes to sample 50 class images.
+
+Alongside the Unet, **training with the two text encoders in SDXL is also supported**. The implementation is via LoRA as well.  To do so, just replace the config of training commands above with `configs/training/sd_xl_base_finetune_dreambooth_textencoder_lora_910b.yaml`. In our experiment, training without text encoders yields better generation results.
+
 
 ## Inference
 
@@ -115,7 +117,6 @@ Notice that the training command above gets finetuned lora weights in the specif
 
   ```shell
   # (recommend) run with streamlit
-  export MS_PYNATIVE_GE=1
   export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
   streamlit run demo/sampling.py --server.port <your_port>
   ```
@@ -124,10 +125,9 @@ Notice that the training command above gets finetuned lora weights in the specif
 
   ```shell
   # run with other commands
-  export MS_PYNATIVE_GE=1
   python demo/sampling_without_streamlit.py \
     --task txt2img \
-    --config configs/training/sd_xl_base_finetune_dreambooth_lora.yaml \
+    --config configs/training/sd_xl_base_finetune_dreambooth_lora_910b.yaml \
     --weight checkpoints/sd_xl_base_1.0_ms.ckpt,runs/SDXL_base_1.0_1000_lora.ckpt \
     --prompt "a sks dog swimming in a pool" \
     --device_target Ascend

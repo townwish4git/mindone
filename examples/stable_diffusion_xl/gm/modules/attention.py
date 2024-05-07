@@ -1,4 +1,10 @@
 # reference to https://github.com/Stability-AI/generative-models
+import logging
+
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal  # FIXME: python 3.7
 
 from gm.modules.diffusionmodules.util import normalization, zero_module
 from gm.modules.transformers import scaled_dot_product_attention
@@ -16,8 +22,12 @@ try:
     FLASH_IS_AVAILABLE = True
     print("flash attention is available.")
 except ImportError:
+    FlashAttention = None
     FLASH_IS_AVAILABLE = False
     print("flash attention is unavailable.")
+
+
+_logger = logging.getLogger(__name__)
 
 
 # feedforward
@@ -36,7 +46,7 @@ class FeedForward(nn.Cell):
         super().__init__()
         inner_dim = int(dim * mult)
         dim_out = default(dim_out, dim)
-        project_in = nn.SequentialCell([nn.Dense(dim, inner_dim), nn.GELU()]) if not glu else GEGLU(dim, inner_dim)
+        project_in = nn.SequentialCell([nn.Dense(dim, inner_dim), nn.GELU(False)]) if not glu else GEGLU(dim, inner_dim)
 
         self.net = nn.SequentialCell([project_in, nn.Dropout(p=dropout), nn.Dense(inner_dim, dim_out)])
 
@@ -64,7 +74,8 @@ class LinearAttention(nn.Cell):
         q, k, v = ops.split(qkv, 1)
         q, k, v = q.squeeze(0), k.squeeze(0), v.squeeze(0)
 
-        k = ops.softmax(k, axis=-1)
+        _k_dtype = k.dtype
+        k = ops.softmax(k.astype(ms.float32), axis=-1).astype(_k_dtype)
 
         # context = ops.einsum("bhdn,bhen->bhde", k, v)
         context = ops.BatchMatMul(transpose_b=True)(k, v)  # bhdn  # bhen  # bhde
@@ -103,7 +114,7 @@ class MemoryEfficientCrossAttention(nn.Cell):
 
         self.to_out = nn.SequentialCell(nn.Dense(inner_dim, query_dim), nn.Dropout(p=dropout))
 
-        self.flash_attention = FlashAttention(head_dim=dim_head, head_num=heads, next_block_num=0, high_precision=False)
+        self.flash_attention = FlashAttention(head_dim=dim_head, head_num=heads, high_precision=True)
 
     def construct(self, x, context=None, mask=None, additional_tokens=None):
         h = self.heads
@@ -132,14 +143,16 @@ class MemoryEfficientCrossAttention(nn.Cell):
         head_dim = q.shape[-1]
         if q_n % 16 == 0 and k_n % 16 == 0 and head_dim <= 256:
             if mask is None:
-                mask = ops.zeros((q_b, q_n, q_n), q.dtype)
-            out = self.flash_attention(q, k, v, mask)
+                mask = ops.zeros((q_b, q_n, q_n), ms.uint8)
+            out = self.flash_attention(q.to(ms.float16), k.to(ms.float16), v.to(ms.float16), mask.to(ms.uint8))
         else:
             out = scaled_dot_product_attention(q, k, v, attn_mask=mask)  # scale is dim_head ** -0.5 per default
 
         # rearange_out, "b h n d -> b n (h d)"
         b, h, n, d = out.shape
         out = out.transpose(0, 2, 1, 3).view(b, n, -1)
+        dtype = q.dtype
+        out = out.to(dtype)
 
         if additional_tokens is not None:
             # remove additional token
@@ -282,20 +295,24 @@ class SpatialTransformer(nn.Cell):
         context_dim=None,
         disable_self_attn=False,
         use_linear=False,
-        attn_type="vanilla",
+        attn_type: Literal["vanilla", "flash-attention"] = "vanilla",
     ):
         super().__init__()
-        print(f"constructing {self.__class__.__name__} of depth {depth} w/ {in_channels} channels and {n_heads} heads")
+        _logger.debug(
+            f"constructing {self.__class__.__name__} of depth {depth} w/ {in_channels} channels and {n_heads} heads"
+        )
         from omegaconf import ListConfig
 
         if exists(context_dim) and not isinstance(context_dim, (list, ListConfig)):
             context_dim = [context_dim]
         if exists(context_dim) and isinstance(context_dim, list):
             if depth != len(context_dim):
-                print(
-                    f"WARNING: {self.__class__.__name__}: Found context dims {context_dim} of depth {len(context_dim)}, "
-                    f"which does not match the specified 'depth' of {depth}. Setting context_dim to {depth * [context_dim[0]]} now."
-                )
+                # disable context setting print
+                # print(
+                #     f"WARNING: {self.__class__.__name__}: Found context dims {context_dim} of depth {len(context_dim)}, "
+                #     f"which does not match the specified 'depth' of {depth}. Setting context_dim to {depth * [context_dim[0]]} now."
+                # )
+
                 # depth does not match context dims.
                 assert all(
                     map(lambda x: x == context_dim[0], context_dim)

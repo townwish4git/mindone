@@ -40,10 +40,10 @@ class StandardDiffusionLoss(nn.Cell):
         return noised_input
 
     def construct(self, pred, target, w):
-        dtype = pred.dtype
         if self.keep_loss_fp32:
             pred = ops.cast(pred, ms.float32)
             target = ops.cast(target, ms.float32)
+        dtype = pred.dtype
 
         if self.type == "l2":
             loss = ops.mean((w * (pred - target) ** 2).reshape(target.shape[0], -1), 1).astype(dtype)
@@ -53,20 +53,13 @@ class StandardDiffusionLoss(nn.Cell):
             loss = 0.0
         return loss
 
-    # TODO: Delete it
-    def bak_call(self, network, denoiser, conditioner, input, batch):
-        cond = conditioner(batch)
-        additional_model_inputs = {key: batch[key] for key in self.batch2model_keys.intersection(batch)}
 
-        sigmas = self.sigma_sampler(input.shape[0])
-        noise = ops.randn_like(input)
+class StandardDiffusionLoss2(StandardDiffusionLoss):
+    def get_noise_input(self, pred, noise, sigmas):
+        input = pred
         if self.offset_noise_level > 0.0:
             noise = noise + self.offset_noise_level * append_dims(
-                ops.randn(input.shape[0], dtype=input.dtype), input.ndim
+                ops.randn(input.shape[0], input.shape[1], dtype=input.dtype), input.ndim
             )
         noised_input = input + noise * append_dims(sigmas, input.ndim)
-        model_output = denoiser(network, noised_input, sigmas, cond, **additional_model_inputs)
-        w = append_dims(denoiser.w(sigmas), input.ndim)
-        loss = self.get_loss(model_output, input, w)
-
-        return loss
+        return noised_input

@@ -35,7 +35,6 @@ def build_model_from_config(config, enable_flash_attention=None):
     if args is not None:
         if enable_flash_attention is not None:
             config["params"]["unet_config"]["params"]["enable_flash_attention"] = enable_flash_attention
-
     if "target" not in config:
         if config == "__is_first_stage__":
             return None
@@ -55,10 +54,19 @@ def get_obj_from_str(string, reload=False):
     return getattr(importlib.import_module(module, package=None), cls)
 
 
-def load_pretrained_model(pretrained_ckpt, net):
+def load_pretrained_model(pretrained_ckpt, net, unet_initialize_random=False):
     logger.info(f"Loading pretrained model from {pretrained_ckpt}")
     if os.path.exists(pretrained_ckpt):
         param_dict = load_checkpoint(pretrained_ckpt)
+
+        if unet_initialize_random:
+            pnames = list(param_dict.keys())
+            # pop unet params from pretrained weight
+            for pname in pnames:
+                if pname.startswith("model.diffusion_model"):
+                    param_dict.pop(pname)
+            logger.warning("UNet will be initialized randomly")
+
         if is_old_ms_version():
             param_not_load = load_param_into_net(net, param_dict)
         else:
@@ -151,6 +159,8 @@ def parse_args():
         help="scale, the higher, the more LoRA weights will affect orignal SD. If 0, LoRA has no effect.",
     )
 
+    parser.add_argument("--unet_initialize_random", default=False, type=str2bool, help="initialize unet randomly")
+    parser.add_argument("--dataset_sink_mode", default=False, type=str2bool, help="sink mode")
     parser.add_argument("--optim", default="adamw", type=str, help="optimizer")
     parser.add_argument(
         "--betas", type=float, default=[0.9, 0.999], help="Specify the [beta1, beta2] parameter for the Adam optimizer."
@@ -172,6 +182,7 @@ def parse_args():
     # parser.add_argument("--cond_stage_trainable", default=False, type=str2bool, help="whether text encoder is trainable")
     parser.add_argument("--use_ema", default=False, type=str2bool, help="whether use EMA")
     parser.add_argument("--clip_grad", default=False, type=str2bool, help="whether apply gradient clipping")
+    # parser.add_argument("--use_recompute", default=None, type=str2bool, help="whether use recompute")
     parser.add_argument(
         "--enable_flash_attention",
         default=None,
@@ -244,7 +255,9 @@ def main(args):
             args.pretrained_model_path, args.custom_text_encoder, latent_diffusion_with_loss
         )
     else:
-        load_pretrained_model(args.pretrained_model_path, latent_diffusion_with_loss)
+        load_pretrained_model(
+            args.pretrained_model_path, latent_diffusion_with_loss, unet_initialize_random=args.unet_initialize_random
+        )
 
     # build dataset
     tokenizer = latent_diffusion_with_loss.cond_stage_model.tokenizer
@@ -433,8 +446,12 @@ def main(args):
         # backup config files
         shutil.copyfile(args.model_config, os.path.join(args.output_path, "model_config.yaml"))
 
+        with open(os.path.join(args.output_path, "args.yaml"), "w") as f:
+            yaml.safe_dump(vars(args), stream=f, default_flow_style=False, sort_keys=False)
     # train
-    model.train(args.epochs, dataset, callbacks=callback, dataset_sink_mode=False, initial_epoch=start_epoch)
+    model.train(
+        args.epochs, dataset, callbacks=callback, dataset_sink_mode=args.dataset_sink_mode, initial_epoch=start_epoch
+    )
 
     if args.profile:
         profiler.analyse()

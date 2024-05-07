@@ -8,7 +8,7 @@ from mindspore import ops
 
 class VanillaCFG:
     """
-    implements parallelized CFG
+    implements parallelized CFG (classifier-free guidance)
     """
 
     def __init__(self, scale, dyn_thresh_config=None):
@@ -22,10 +22,10 @@ class VanillaCFG:
         )
 
     def __call__(self, x, sigma):
-        _id = x.shape[0] // 2
-        x_u, x_c = x[:_id], x[_id:]
+        x = self.dyn_thresh(x)
+        x_uncond, x_cond = x.chunk(2)
         scale_value = self.scale_schedule(sigma)
-        x_pred = self.dyn_thresh(x_u, x_c, scale_value)
+        x_pred = x_uncond + scale_value * (x_cond - x_uncond)
         return x_pred
 
     def prepare_inputs(self, x, s, c, uc):

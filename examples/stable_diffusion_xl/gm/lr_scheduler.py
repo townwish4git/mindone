@@ -1,6 +1,23 @@
 # reference to https://github.com/Stability-AI/generative-models
 
+from bisect import bisect_right
+
 import numpy as np
+
+
+class LambdaWarmUpScheduler:
+    """
+    note: use with a base_lr of 1.0
+    """
+
+    def __init__(
+        self,
+        warm_up_steps,
+    ):
+        self.warm_up_steps = warm_up_steps
+
+    def __call__(self, cur_step, **kwargs):
+        return max(0.0, min(cur_step, self.warm_up_steps) / self.warm_up_steps)
 
 
 class LambdaWarmUpCosineScheduler:
@@ -107,3 +124,28 @@ class LambdaLinearScheduler(LambdaWarmUpCosineScheduler2):
             )
             self.last_f = f
             return f
+
+
+class MultiStepLR:
+    """Decays the learning rate of each parameter group by gamma once the
+    number of step reaches one of the milestones.
+
+    Args:
+        milestones (list): List of epoch indices. Must be increasing.
+        gamma (float): Multiplicative factor of learning rate decay.
+            Default: 0.1.
+        verbose (bool): If ``True``, prints a message to stdout for
+            each update. Default: ``False``.
+    """
+
+    def __init__(self, milestones, gamma=0.1, verbose=False):
+        self.gamma = gamma
+        self.milestones = sorted(milestones)
+        self.lrs = [gamma**i for i in range(len(milestones) + 1)]
+        self.verbose = verbose
+
+    def schedule(self, n, **kwargs):
+        return self.lrs[bisect_right(self.milestones, n)]
+
+    def __call__(self, n, **kwargs):
+        return self.schedule(n, **kwargs)

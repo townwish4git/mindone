@@ -15,8 +15,8 @@
 import gc
 import logging
 import os
+import random
 from collections import defaultdict
-from random import randint
 
 import albumentations
 import imagesize
@@ -45,6 +45,7 @@ def load_data(
     sample_num=-1,
     enable_modelarts=False,
     drop_text_prob=0.0,
+    shuffle=True,
 ):
     if not os.path.exists(data_path):
         raise ValueError(f"Data directory {data_path} does not exist!")
@@ -72,7 +73,9 @@ def load_data(
     if enable_modelarts:
         device_num = get_local_rank_size()
         rank_id = get_local_rank() % 8
-    loader = build_dataloader_ft(dataset, datalen, t2i_collate, batch_size, device_num, rank_id=rank_id)
+    loader = build_dataloader_ft(
+        dataset, datalen, t2i_collate, batch_size, device_num, rank_id=rank_id, shuffle=shuffle
+    )
     dataloaders["ftT2I"] = loader
     if sample_num == -1:
         batchlen = datalen // (batch_size * device_num)
@@ -86,8 +89,8 @@ def load_data(
     return dataset
 
 
-def build_dataloader_ft(dataset, datalens, collate_fn, batch_size, device_num, rank_id=0):
-    sampler = BatchSampler(datalens, batch_size=batch_size, device_num=device_num)
+def build_dataloader_ft(dataset, datalens, collate_fn, batch_size, device_num, rank_id=0, shuffle=True):
+    sampler = BatchSampler(datalens, batch_size=batch_size, device_num=device_num, shuffle=shuffle)
     loader = DataLoader(
         dataset, batch_sampler=sampler, collate_fn=collate_fn, device_num=device_num, drop_last=True, rank_id=rank_id
     )
@@ -200,7 +203,7 @@ class ImageDataset:
         return len(self.local_images)
 
     def random_sample(self):
-        return self.__getitem__(randint(0, self.__len__() - 1))
+        return self.__getitem__(random.randint(0, self.__len__() - 1))
 
     def sequential_sample(self, ind):
         if ind >= self.__len__() - 1:
@@ -223,7 +226,7 @@ class ImageDataset:
         else:
             caption = self.local_captions[idx]
         caption_input = self.tokenize(caption)
-        return np.array(image_input, dtype=np.float32), np.array(caption_input, dtype=np.int32)
+        return np.array(image_input, dtype=np.float32), np.array(caption_input, dtype=np.int64)
 
     def preprocess_image(self, image_path):
         try:
@@ -239,6 +242,11 @@ class ImageDataset:
         return image
 
     def tokenize(self, text):
+        # a hack to determine if use transformers.CLIPTokenizer
+        # should handle it better
+        if type(self.tokenizer).__name__ == "CLIPTokenizer":
+            return self._clip_tokenize(text)
+
         SOT_TEXT = self.tokenizer.sot_text  # "[CLS]"
         EOT_TEXT = self.tokenizer.eot_text  # "[SEP]"
         CONTEXT_LEN = self.tokenizer.context_length
@@ -246,12 +254,24 @@ class ImageDataset:
         sot_token = self.tokenizer.encoder[SOT_TEXT]
         eot_token = self.tokenizer.encoder[EOT_TEXT]
         tokens = [sot_token] + self.tokenizer.encode(text) + [eot_token]
-        result = np.zeros([CONTEXT_LEN])
+        result = np.zeros([CONTEXT_LEN]) + eot_token
         if len(tokens) > CONTEXT_LEN:
             tokens = tokens[: CONTEXT_LEN - 1] + [eot_token]
         result[: len(tokens)] = tokens
 
         return result
+
+    def _clip_tokenize(self, texts):
+        batch_encoding = self.tokenizer(
+            texts,
+            truncation=True,
+            max_length=self.tokenizer.context_length,
+            return_length=True,
+            return_overflowing_tokens=False,
+            padding="max_length",
+        )
+        tokens = np.array(batch_encoding["input_ids"], dtype=np.int32)
+        return tokens
 
 
 class BatchSampler:
@@ -259,15 +279,18 @@ class BatchSampler:
     Batch Sampler
     """
 
-    def __init__(self, lens, batch_size, device_num):
+    def __init__(self, lens, batch_size, device_num, shuffle):
         self._lens = lens
         self._batch_size = batch_size * device_num
+        self.shuffle = shuffle
 
     def _create_ids(self):
         return list(range(self._lens))
 
     def __iter__(self):
         ids = self._create_ids()
+        if self.shuffle:
+            random.shuffle(ids)
         batches = [ids[i : i + self._batch_size] for i in range(0, len(ids), self._batch_size)]
         gc.collect()
         return iter(batches)
@@ -400,6 +423,7 @@ def build_dataset(
     replace,
     enable_modelarts,
     drop_text_prob=0.0,
+    shuffle=True,
 ):
     dataset = load_data(
         data_path=data_path,
@@ -415,6 +439,7 @@ def build_dataset(
         sample_num=-1,
         enable_modelarts=enable_modelarts,
         drop_text_prob=drop_text_prob,
+        shuffle=shuffle,
     )
     _logger.info(f"Num batches for rank {rank_id}: {dataset.get_dataset_size()}")
 

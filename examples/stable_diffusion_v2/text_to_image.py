@@ -8,6 +8,7 @@ import sys
 import time
 
 import numpy as np
+from common import init_env
 from omegaconf import OmegaConf
 from PIL import Image
 
@@ -21,10 +22,12 @@ from ldm.models.diffusion.plms import PLMSSampler
 from ldm.models.diffusion.uni_pc import UniPCSampler
 from ldm.modules.logger import set_logger
 from ldm.modules.lora import inject_trainable_lora, inject_trainable_lora_to_textencoder
-from ldm.modules.train.tools import set_random_seed
 from ldm.util import instantiate_from_config, str2bool
+from tools.safety_checker import SafetyChecker
+from tools.watermark import WatermarkEmbedder
 from utils import model_utils
 from utils.download import download_checkpoint
+from utils.long_prompt import get_text_embeddings
 
 logger = logging.getLogger("text_to_image")
 
@@ -38,6 +41,7 @@ _version_cfg = {
     "1.5-wukong": ("wukong-huahua-ms.ckpt", "v1-inference-chinese.yaml", 512),
 }
 _URL_PREFIX = "https://download.mindspore.cn/toolkits/mindone/stable_diffusion"
+CLIP_CKPT_URL = "https://ascend-repo-modelzoo.obs.cn-east-2.myhuaweicloud.com/MindFormers/clip/clip_vit_l_14.ckpt"
 _MIN_CKPT_SIZE = 4.0 * 1e9
 
 
@@ -53,7 +57,9 @@ def numpy_to_pil(images):
     return pil_images
 
 
-def load_model_from_config(config, ckpt, use_lora=False, lora_rank=4, lora_fp16=True, lora_only_ckpt=None):
+def load_model_from_config(
+    config, ckpt, use_lora=False, lora_rank=4, lora_fp16=True, lora_only_ckpt=None, ti_only_ckpt=None
+):
     model = instantiate_from_config(config.model)
 
     def _load_model(_model, ckpt_fp, verbose=True, filter=None):
@@ -110,15 +116,32 @@ def load_model_from_config(config, ckpt, use_lora=False, lora_rank=4, lora_fp16=
     else:
         logger.info(f"Loading model from {ckpt}")
         _load_model(model, ckpt)
+    if ti_only_ckpt is not None:
+        from ldm.modules.textual_inversion.manager import TextualInversionManager
+
+        logger.info(f"Loading Textual Inversion params from {ti_only_ckpt}")
+        manager = TextualInversionManager(
+            model,
+        )
+        manager.load_checkpoint_textual_inversion(ti_only_ckpt)
 
     model.set_train(False)
     for param in model.trainable_params():
         param.requires_grad = False
-
+    if ti_only_ckpt is not None:
+        return model, manager
     return model
 
 
 def main(args):
+    # init
+    device_id, rank_id, device_num = init_env(
+        args.ms_mode,
+        seed=args.seed,
+        distributed=args.use_parallel,
+        device_target=args.device_target,
+    )
+
     # set logger
     set_logger(
         name="",
@@ -167,13 +190,7 @@ def main(args):
 
     sample_path = os.path.join(outpath, "samples")
     os.makedirs(sample_path, exist_ok=True)
-    base_count = len(os.listdir(sample_path))
-
-    # set ms context
-    device_id = int(os.getenv("DEVICE_ID", 0))
-    ms.context.set_context(mode=args.ms_mode, device_target="Ascend", device_id=device_id, max_device_memory="30GB")
-
-    set_random_seed(args.seed)
+    base_count = len(os.listdir(sample_path)) + rank_id * args.n_samples * args.n_iter
 
     # create model
     if not os.path.isabs(args.config):
@@ -185,7 +202,11 @@ def main(args):
         use_lora=args.use_lora,
         lora_rank=args.lora_rank,
         lora_only_ckpt=args.lora_ckpt_path,
+        ti_only_ckpt=args.ti_ckpt_path,
     )
+    if args.ti_ckpt_path is not None:
+        model, manager = model
+        data = [[manager.manage_prompt(p) for p in prompts] for prompts in data]
 
     prediction_type = getattr(config.model, "prediction_type", "noise")
     logger.info(f"Prediction type: {prediction_type}")
@@ -207,16 +228,28 @@ def main(args):
         sname = "dpm_solver_pp"
     if prediction_type == "v":
         assert sname in [
+            "ddim",
             "dpm_solver",
             "dpm_solver_pp",
-        ], "Only dpm_solver and dpm_solver_pp support v-prediction currently."
+        ], "Only ddim, dpm_solver and dpm_solver_pp support v-prediction currently."
+
+    # create safety checker
+    if args.check_safety:
+        if args.clip_ckpt_path is None:
+            clip_ckpt_name = os.path.basename(CLIP_CKPT_URL)
+            args.clip_ckpt_path = "models/" + clip_ckpt_name
+            if not os.path.exists(args.clip_ckpt_path):
+                print(f"Start downloading checkpoint {clip_ckpt_name} ...")
+                download_checkpoint(CLIP_CKPT_URL, "models/")
+
+        safety_checker = SafetyChecker(safety_version=args.safety_version, backend="ms", ckpt_path=args.clip_ckpt_path)
 
     # log
     key_info = "Key Settings:\n" + "=" * 50 + "\n"
     key_info += "\n".join(
         [
             f"MindSpore mode[GRAPH(0)/PYNATIVE(1)]: {args.ms_mode}",
-            "Distributed mode: False",
+            f"Distributed mode: {args.use_parallel}",
             f"Number of input prompts: {len(data)}",
             f"Number of input negative prompts: {len(negative_data)}",
             f"Number of trials for each prompt: {args.n_iter}",
@@ -225,6 +258,7 @@ def main(args):
             f"Precision: {model.model.diffusion_model.dtype}",
             f"Pretrained ckpt path: {args.ckpt_path}",
             f"Lora ckpt path: {args.lora_ckpt_path if args.use_lora else None}",
+            f"Textual Inversion ckpt path: {args.ti_ckpt_path}",
             f"Sampler: {sname}",
             f"Sampling steps: {args.sampling_steps}",
             f"Uncondition guidance scale: {args.scale}",
@@ -232,7 +266,8 @@ def main(args):
         ]
     )
     key_info += "\n" + "=" * 50
-    logger.info(key_info)
+    if rank_id == 0:
+        logger.info(key_info)
 
     # infer
     start_code = None
@@ -241,10 +276,17 @@ def main(args):
         start_code = stdnormal((args.n_samples, 4, args.H // 8, args.W // 8))
 
     all_samples = list()
-    for i, prompts in enumerate(data):
-        negative_prompts = negative_data[i]
+    for i in range(0, len(data), device_num):
+        if i > 0:
+            base_count += args.n_samples * args.n_iter * (device_num - 1)
+        if i + rank_id < len(data):
+            prompts = data[i + rank_id]
+            negative_prompts = negative_data[i + rank_id]
+        else:
+            break
+
         logger.info(
-            f"[{i + 1}/{len(data)}] Generating images with conditions:\nPrompt(s): {prompts[0]}\n"
+            f"[{i + rank_id + 1}/{len(data)}] Generating images with conditions:\nPrompt(s): {prompts[0]}\n"
             f"Negative prompt(s): {negative_prompts[0]}"
         )
         for n in range(args.n_iter):
@@ -253,12 +295,13 @@ def main(args):
             if args.scale != 1.0:
                 if isinstance(negative_prompts, tuple):
                     negative_prompts = list(negative_prompts)
-                tokenized_negative_prompts = model.tokenize(negative_prompts)
-                uc = model.get_learned_conditioning(tokenized_negative_prompts)
+            else:
+                negative_prompts = None
             if isinstance(prompts, tuple):
                 prompts = list(prompts)
-            tokenized_prompts = model.tokenize(prompts)
-            c = model.get_learned_conditioning(tokenized_prompts)
+            c, uc = get_text_embeddings(
+                model, prompts, negative_prompts, support_long_prompts=args.support_long_prompts
+            )
             shape = [4, args.H // 8, args.W // 8]
             samples_ddim, _ = sampler.sample(
                 S=args.sampling_steps,
@@ -273,6 +316,13 @@ def main(args):
             )
             x_samples_ddim = model.decode_first_stage(samples_ddim)
             x_samples_ddim = ms.ops.clip_by_value((x_samples_ddim + 1.0) / 2.0, clip_value_min=0.0, clip_value_max=1.0)
+
+            if args.add_watermark:
+                water_mark = WatermarkEmbedder(dtype=model.model.diffusion_model.dtype)
+                x_samples_ddim = water_mark(x_samples_ddim)
+            if args.check_safety:
+                x_samples_ddim, _ = safety_checker(x_samples_ddim)
+
             x_samples_ddim_numpy = x_samples_ddim.asnumpy()
 
             if not args.skip_save:
@@ -290,8 +340,8 @@ def main(args):
                 f"{batch_size * (n + 1)}/{batch_size * args.n_iter} images generated, "
                 f"time cost for current trial: {end_time - start_time:.3f}s"
             )
-
-    logger.info(f"Done! All generated images are saved in: {outpath}/samples" f"\nEnjoy.")
+    if rank_id == 0:
+        logger.info(f"Done! All generated images are saved in: {outpath}/samples" f"\nEnjoy.")
 
 
 if __name__ == "__main__":
@@ -299,6 +349,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--ms_mode", type=int, default=0, help="Running in GRAPH_MODE(0) or PYNATIVE_MODE(1) (default=0)"
     )
+    parser.add_argument("--use_parallel", default=False, type=str2bool, help="use parallel")
+    parser.add_argument("--device_target", type=str, nargs="?", default="Ascend", help="Ascend, GPU")
     parser.add_argument(
         "--data_path",
         type=str,
@@ -365,6 +417,12 @@ if __name__ == "__main__":
         type=int,
         default=4,
         help="how many samples to produce for each given prompt in an iteration. A.k.a. batch size",
+    )
+    parser.add_argument(
+        "--support_long_prompts",
+        default=False,
+        type=str2bool,
+        help="Whether to support long prompts exceeding the context length. If False, it will truncate the text prompts",
     )
     parser.add_argument(
         "--H",
@@ -451,6 +509,12 @@ if __name__ == "__main__":
         help="path to lora only checkpoint. Set it if use_lora is not None",
     )
     parser.add_argument(
+        "--ti_ckpt_path",
+        type=str,
+        default=None,
+        help="path to textual inversion only checkpoint. ",
+    )
+    parser.add_argument(
         "--lora_scale",
         default=1.0,
         type=float,
@@ -467,6 +531,28 @@ if __name__ == "__main__":
         type=str,
         default="logging.INFO",
         help="log level, options: logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR",
+    )
+    parser.add_argument(
+        "--add_watermark",
+        action="store_true",
+        help="whether add invisible watermark to image",
+    )
+    parser.add_argument(
+        "--check_safety",
+        action="store_true",
+        help="set this flag to use a safety checker",
+    )
+    parser.add_argument(
+        "--clip_ckpt_path",
+        type=str,
+        default=None,
+        help="path to checkpoint of clip-vit-large-patch14 for safety checker",
+    )
+    parser.add_argument(
+        "--safety_version",
+        type=int,
+        default=2,
+        help="the version of stable diffusion to use for its safety checker. Option: 1, 2" "Default: 2",
     )
     args = parser.parse_args()
 
@@ -495,6 +581,7 @@ if __name__ == "__main__":
         if not os.path.exists(args.ckpt_path):
             print(f"Start downloading checkpoint {ckpt_name} ...")
             download_checkpoint(os.path.join(_URL_PREFIX, ckpt_name), "models/")
+
     if args.config is None:
         args.config = os.path.join("configs", _version_cfg[args.version][1])
 
