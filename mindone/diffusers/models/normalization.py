@@ -13,11 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import numbers
-from typing import Tuple
+from typing import Dict, Optional, Tuple
 
 import mindspore as ms
 from mindspore import Parameter, Tensor, nn, ops
 from mindspore.common.initializer import initializer
+
+from .embeddings import PixArtAlphaCombinedTimestepSizeEmbeddings
 
 
 class LayerNorm(nn.Cell):
@@ -198,3 +200,36 @@ class GroupNorm(nn.Cell):
         expanded_shape = (1, -1) + (1,) * len(x_shape[2:])
         output = x * self.weight.reshape(expanded_shape) + self.bias.reshape(expanded_shape)
         return output
+
+
+class AdaLayerNormSingle(nn.Cell):
+    r"""
+    Norm layer adaptive layer norm single (adaLN-single).
+
+    As proposed in PixArt-Alpha (see: https://arxiv.org/abs/2310.00426; Section 2.3).
+
+    Parameters:
+        embedding_dim (`int`): The size of each embedding vector.
+        use_additional_conditions (`bool`): To use additional conditions for normalization or not.
+    """
+
+    def __init__(self, embedding_dim: int, use_additional_conditions: bool = False):
+        super().__init__()
+
+        self.emb = PixArtAlphaCombinedTimestepSizeEmbeddings(
+            embedding_dim, size_emb_dim=embedding_dim // 3, use_additional_conditions=use_additional_conditions
+        )
+
+        self.silu = nn.SiLU()
+        self.linear = nn.Dense(embedding_dim, 6 * embedding_dim, has_bias=True)
+
+    def construct(
+        self,
+        timestep: ms.Tensor,
+        added_cond_kwargs: Optional[Dict[str, ms.Tensor]] = None,
+        batch_size: Optional[int] = None,
+        hidden_dtype=None,
+    ) -> Tuple[ms.Tensor, ms.Tensor, ms.Tensor, ms.Tensor, ms.Tensor]:
+        # No modulation happening here.
+        embedded_timestep = self.emb(timestep, **added_cond_kwargs, batch_size=batch_size, hidden_dtype=hidden_dtype)
+        return self.linear(self.silu(embedded_timestep)), embedded_timestep

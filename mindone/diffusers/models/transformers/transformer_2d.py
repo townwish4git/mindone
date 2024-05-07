@@ -20,8 +20,9 @@ from mindspore import nn
 from ...configuration_utils import ConfigMixin, register_to_config
 from ...utils import BaseOutput, deprecate, logging
 from ..attention import BasicTransformerBlock
+from ..embeddings import PatchEmbed, PixArtAlphaTextProjection
 from ..modeling_utils import ModelMixin
-from ..normalization import GroupNorm
+from ..normalization import GroupNorm, AdaLayerNormSingle
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -109,13 +110,22 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                     f"When using a `patch_size` and this `norm_type` ({norm_type}), `num_embeds_ada_norm` cannot be None."
                 )
 
+        # Set some common variables used across the board.
         self.use_linear_projection = use_linear_projection
+        self.interpolation_scale = interpolation_scale
+        self.caption_channels = caption_channels
         self.num_attention_heads = num_attention_heads
         self.attention_head_dim = attention_head_dim
-        inner_dim = num_attention_heads * attention_head_dim
-
-        conv_cls = nn.Conv2d
-        linear_cls = nn.Dense
+        self.inner_dim = self.config.num_attention_heads * self.config.attention_head_dim
+        self.in_channels = in_channels
+        self.out_channels = in_channels if out_channels is None else out_channels
+        self.gradient_checkpointing = False
+        if use_additional_conditions is None:
+            if norm_type == "ada_norm_single" and sample_size == 128:
+                use_additional_conditions = True
+            else:
+                use_additional_conditions = False
+        self.use_additional_conditions = use_additional_conditions
 
         # 1. Transformer2DModel can process both standard continuous images of shape `(batch_size, num_channels, width, height)` as well as quantized image embeddings of shape `(batch_size, num_image_vectors)`  # noqa: E501
         # Define whether input is continuous or discrete depending on configuration
@@ -152,62 +162,65 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
         # 2. Define input layers
         if self.is_input_continuous:
-            self.in_channels = in_channels
-
-            self.norm = GroupNorm(num_groups=norm_num_groups, num_channels=in_channels, eps=1e-6, affine=True)
-            if use_linear_projection:
-                self.proj_in = linear_cls(in_channels, inner_dim)
-            else:
-                self.proj_in = conv_cls(in_channels, inner_dim, kernel_size=1, stride=1, padding=0, has_bias=True)
+            self._init_continuous_input(norm_type=norm_type)
         elif self.is_input_vectorized:
-            raise NotImplementedError("ImagePositionalEmbeddings is not implemented")
+            self._init_vectorized_inputs(norm_type=norm_type)
         elif self.is_input_patches:
             self._init_patched_inputs(norm_type=norm_type)
 
-        # 3. Define transformers blocks
+    def _init_continuous_input(self, norm_type):
+        conv_cls = nn.Conv2d
+        linear_cls = nn.Dense
+
+        self.norm = GroupNorm(num_groups=self.norm_num_groups, num_channels=self.in_channels, eps=1e-6, affine=True)
+        if self.use_linear_projection:
+            self.proj_in = linear_cls(self.in_channels, self.inner_dim)
+        else:
+            self.proj_in = conv_cls(self.in_channels, self.inner_dim, kernel_size=1, stride=1, padding=0, has_bias=True)
+        
         self.transformer_blocks = nn.CellList(
             [
                 BasicTransformerBlock(
-                    inner_dim,
-                    num_attention_heads,
-                    attention_head_dim,
-                    dropout=dropout,
-                    cross_attention_dim=cross_attention_dim,
-                    activation_fn=activation_fn,
-                    num_embeds_ada_norm=num_embeds_ada_norm,
-                    attention_bias=attention_bias,
-                    only_cross_attention=only_cross_attention,
-                    double_self_attention=double_self_attention,
-                    upcast_attention=upcast_attention,
+                    self.inner_dim,
+                    self.config.num_attention_heads,
+                    self.config.attention_head_dim,
+                    dropout=self.config.dropout,
+                    cross_attention_dim=self.config.cross_attention_dim,
+                    activation_fn=self.config.activation_fn,
+                    num_embeds_ada_norm=self.config.num_embeds_ada_norm,
+                    attention_bias=self.config.attention_bias,
+                    only_cross_attention=self.config.only_cross_attention,
+                    double_self_attention=self.config.double_self_attention,
+                    upcast_attention=self.config.upcast_attention,
                     norm_type=norm_type,
-                    norm_elementwise_affine=norm_elementwise_affine,
-                    norm_eps=norm_eps,
-                    attention_type=attention_type,
+                    norm_elementwise_affine=self.config.norm_elementwise_affine,
+                    norm_eps=self.config.norm_eps,
+                    attention_type=self.config.attention_type,
                 )
-                for d in range(num_layers)
+                for d in range(self.config.num_layers)
             ]
         )
 
-        # 4. Define output layers
-        self.out_channels = in_channels if out_channels is None else out_channels
-        if self.is_input_continuous:
-            # TODO: should use out_channels for continuous projections
-            if use_linear_projection:
-                self.proj_out = linear_cls(inner_dim, in_channels)
-            else:
-                self.proj_out = conv_cls(inner_dim, in_channels, kernel_size=1, stride=1, padding=0, has_bias=True)
+        # TODO: should use out_channels for continuous projections
+        if self.use_linear_projection:
+            self.proj_out = linear_cls(self.inner_dim, self.out_channels)
+        else:
+            self.proj_out = conv_cls(self.inner_dim, self.out_channels, kernel_size=1, stride=1, padding=0, has_bias=True)
 
-        # 5. PixArt-Alpha blocks.
-        self.adaln_single = None
-        self.use_additional_conditions = False
-        if norm_type == "ada_norm_single":
-            raise NotImplementedError("AdaLayerNormSingle is not implemented")
+        # # 5. PixArt-Alpha blocks.
+        # self.adaln_single = None
+        # self.use_additional_conditions = False
+        # if norm_type == "ada_norm_single":
+        #     raise NotImplementedError("AdaLayerNormSingle is not implemented")
 
-        self.caption_projection = None
-        if caption_channels is not None:
-            raise NotImplementedError("PixArtAlphaTextProjection is not implemented")
+        # self.caption_projection = None
+        # if caption_channels is not None:
+        #     raise NotImplementedError("PixArtAlphaTextProjection is not implemented")
 
-        self._gradient_checkpointing = False
+        # self._gradient_checkpointing = False
+
+    def _init_vectorized_inputs(self, norm_type):
+        raise NotImplementedError("ImagePositionalEmbeddings is not implemented")
 
     def _init_patched_inputs(self, norm_type):
         assert self.config.sample_size is not None, "Transformer2DModel over patched input must provide sample_size"
@@ -230,7 +243,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             interpolation_scale=interpolation_scale,
         )
 
-        self.transformer_blocks = nn.ModuleList(
+        self.transformer_blocks = nn.CellList(
             [
                 BasicTransformerBlock(
                     self.inner_dim,
@@ -254,15 +267,15 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         )
 
         if self.config.norm_type != "ada_norm_single":
-            self.norm_out = nn.LayerNorm(self.inner_dim, elementwise_affine=False, eps=1e-6)
-            self.proj_out_1 = nn.Linear(self.inner_dim, 2 * self.inner_dim)
-            self.proj_out_2 = nn.Linear(
+            self.norm_out = nn.LayerNorm((self.inner_dim,), epsilon=1e-6)
+            self.proj_out_1 = nn.Dense(self.inner_dim, 2 * self.inner_dim)
+            self.proj_out_2 = nn.Dense(
                 self.inner_dim, self.config.patch_size * self.config.patch_size * self.out_channels
             )
         elif self.config.norm_type == "ada_norm_single":
-            self.norm_out = nn.LayerNorm(self.inner_dim, elementwise_affine=False, eps=1e-6)
-            self.scale_shift_table = nn.Parameter(torch.randn(2, self.inner_dim) / self.inner_dim**0.5)
-            self.proj_out = nn.Linear(
+            self.norm_out = nn.LayerNorm((self.inner_dim,), epsilon=1e-6)
+            self.scale_shift_table = ms.Parameter(ms.ops.randn(2, self.inner_dim) / self.inner_dim**0.5)
+            self.proj_out = nn.Dense(
                 self.inner_dim, self.config.patch_size * self.config.patch_size * self.out_channels
             )
 
