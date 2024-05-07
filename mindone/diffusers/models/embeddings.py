@@ -118,6 +118,72 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
     return emb
 
 
+class PatchEmbed(nn.Cell):
+    """2D Image to Patch Embedding"""
+
+    def __init__(
+        self,
+        height=224,
+        width=224,
+        patch_size=16,
+        in_channels=3,
+        embed_dim=768,
+        layer_norm=False,
+        flatten=True,
+        bias=True,
+        interpolation_scale=1,
+    ):
+        super().__init__()
+
+        num_patches = (height // patch_size) * (width // patch_size)
+        self.flatten = flatten
+        self.layer_norm = layer_norm
+
+        self.proj = nn.Conv2d(
+            in_channels, embed_dim, kernel_size=(patch_size, patch_size), stride=patch_size, has_bias=bias
+        )
+        if layer_norm:
+            self.norm = LayerNorm(embed_dim, elementwise_affine=False, eps=1e-6)
+        else:
+            self.norm = None
+
+        self.patch_size = patch_size
+        # See:
+        # https://github.com/PixArt-alpha/PixArt-alpha/blob/0f55e922376d8b797edd44d25d0e7464b260dcab/diffusion/model/nets/PixArtMS.py#L161
+        self.height, self.width = height // patch_size, width // patch_size
+        self.base_size = height // patch_size
+        self.interpolation_scale = interpolation_scale
+        pos_embed = get_2d_sincos_pos_embed(
+            embed_dim, int(num_patches**0.5), base_size=self.base_size, interpolation_scale=self.interpolation_scale
+        )
+        self.pos_embed = ms.Tensor.from_numpy(pos_embed).float().unsqueeze(0)
+
+    def construct(self, latent):
+        height, width = latent.shape[-2] // self.patch_size, latent.shape[-1] // self.patch_size
+
+        latent = self.proj(latent)
+        if self.flatten:
+            latent = latent.flatten(start_dim=2).swapaxes(1, 2)  # BCHW -> BNC
+        if self.layer_norm:
+            latent = self.norm(latent)
+
+        # Interpolate positional embeddings if needed.
+        # (For PixArt-Alpha: https://github.com/PixArt-alpha/PixArt-alpha/blob/0f55e922376d8b797edd44d25d0e7464b260dcab/diffusion/model/nets/PixArtMS.py#L162C151-L162C160)
+        if self.height != height or self.width != width:
+            pos_embed = get_2d_sincos_pos_embed(
+                embed_dim=self.pos_embed.shape[-1],
+                grid_size=(height, width),
+                base_size=self.base_size,
+                interpolation_scale=self.interpolation_scale,
+            )
+            pos_embed = ms.Tensor.from_numpy(pos_embed)
+            pos_embed = pos_embed.float().unsqueeze(0)
+        else:
+            pos_embed = self.pos_embed
+
+        return (latent + pos_embed).to(latent.dtype)
+
+
 class TimestepEmbedding(nn.Cell):
     def __init__(
         self,
@@ -268,3 +334,60 @@ class ImageProjection(nn.Cell):
         image_embeds = image_embeds.reshape(batch_size, self.num_image_text_embeds, -1)
         image_embeds = self.norm(image_embeds)
         return image_embeds
+
+
+class PixArtAlphaCombinedTimestepSizeEmbeddings(nn.Cell):
+    """
+    For PixArt-Alpha.
+
+    Reference:
+    https://github.com/PixArt-alpha/PixArt-alpha/blob/0f55e922376d8b797edd44d25d0e7464b260dcab/diffusion/model/nets/PixArtMS.py#L164C9-L168C29
+    """
+
+    def __init__(self, embedding_dim, size_emb_dim, use_additional_conditions: bool = False):
+        super().__init__()
+
+        self.outdim = size_emb_dim
+        self.time_proj = Timesteps(num_channels=256, flip_sin_to_cos=True, downscale_freq_shift=0)
+        self.timestep_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
+
+        self.use_additional_conditions = use_additional_conditions
+        if use_additional_conditions:
+            self.additional_condition_proj = Timesteps(num_channels=256, flip_sin_to_cos=True, downscale_freq_shift=0)
+            self.resolution_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=size_emb_dim)
+            self.aspect_ratio_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=size_emb_dim)
+
+    def construct(self, timestep, resolution, aspect_ratio, batch_size, hidden_dtype):
+        timesteps_proj = self.time_proj(timestep)
+        timesteps_emb = self.timestep_embedder(timesteps_proj.to(dtype=hidden_dtype))  # (N, D)
+
+        if self.use_additional_conditions:
+            resolution_emb = self.additional_condition_proj(resolution.flatten()).to(hidden_dtype)
+            resolution_emb = self.resolution_embedder(resolution_emb).reshape(batch_size, -1)
+            aspect_ratio_emb = self.additional_condition_proj(aspect_ratio.flatten()).to(hidden_dtype)
+            aspect_ratio_emb = self.aspect_ratio_embedder(aspect_ratio_emb).reshape(batch_size, -1)
+            conditioning = timesteps_emb + ops.cat([resolution_emb, aspect_ratio_emb], axis=1)
+        else:
+            conditioning = timesteps_emb
+
+        return conditioning
+
+
+class PixArtAlphaTextProjection(nn.Cell):
+    """
+    Projects caption embeddings. Also handles dropout for classifier-free guidance.
+
+    Adapted from https://github.com/PixArt-alpha/PixArt-alpha/blob/master/diffusion/model/nets/PixArt_blocks.py
+    """
+
+    def __init__(self, in_features, hidden_size, num_tokens=120):
+        super().__init__()
+        self.linear_1 = nn.Dense(in_channels=in_features, out_channels=hidden_size, has_bias =True)
+        self.act_1 = nn.GELU(approximate=True)
+        self.linear_2 = nn.Dense(in_channels=hidden_size, out_channels=hidden_size, has_bias =True)
+
+    def construct(self, caption):
+        hidden_states = self.linear_1(caption)
+        hidden_states = self.act_1(hidden_states)
+        hidden_states = self.linear_2(hidden_states)
+        return hidden_states

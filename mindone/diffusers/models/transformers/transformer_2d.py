@@ -20,8 +20,9 @@ from mindspore import nn
 from ...configuration_utils import ConfigMixin, register_to_config
 from ...utils import BaseOutput, deprecate, logging
 from ..attention import BasicTransformerBlock
+from ..embeddings import PatchEmbed, PixArtAlphaTextProjection
 from ..modeling_utils import ModelMixin
-from ..normalization import GroupNorm
+from ..normalization import LayerNorm, GroupNorm, AdaLayerNormSingle
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -97,6 +98,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         attention_type: str = "default",
         caption_channels: int = None,
         interpolation_scale: float = None,
+        use_additional_conditions: Optional[bool] = None,
     ):
         super().__init__()
         if patch_size is not None:
@@ -109,13 +111,21 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                     f"When using a `patch_size` and this `norm_type` ({norm_type}), `num_embeds_ada_norm` cannot be None."
                 )
 
+        # Set some common variables used across the board.
         self.use_linear_projection = use_linear_projection
+        self.interpolation_scale = interpolation_scale
+        self.caption_channels = caption_channels
         self.num_attention_heads = num_attention_heads
         self.attention_head_dim = attention_head_dim
-        inner_dim = num_attention_heads * attention_head_dim
-
-        conv_cls = nn.Conv2d
-        linear_cls = nn.Dense
+        self.inner_dim = self.config.num_attention_heads * self.config.attention_head_dim
+        self.in_channels = in_channels
+        self.out_channels = in_channels if out_channels is None else out_channels
+        if use_additional_conditions is None:
+            if norm_type == "ada_norm_single" and sample_size == 128:
+                use_additional_conditions = True
+            else:
+                use_additional_conditions = False
+        self.use_additional_conditions = use_additional_conditions
 
         # 1. Transformer2DModel can process both standard continuous images of shape `(batch_size, num_channels, width, height)` as well as quantized image embeddings of shape `(batch_size, num_image_vectors)`  # noqa: E501
         # Define whether input is continuous or discrete depending on configuration
@@ -152,62 +162,139 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
         # 2. Define input layers
         if self.is_input_continuous:
-            self.in_channels = in_channels
-
-            self.norm = GroupNorm(num_groups=norm_num_groups, num_channels=in_channels, eps=1e-6, affine=True)
-            if use_linear_projection:
-                self.proj_in = linear_cls(in_channels, inner_dim)
-            else:
-                self.proj_in = conv_cls(in_channels, inner_dim, kernel_size=1, stride=1, padding=0, has_bias=True)
+            self._init_continuous_input(norm_type=norm_type)
         elif self.is_input_vectorized:
-            raise NotImplementedError("ImagePositionalEmbeddings is not implemented")
+            self._init_vectorized_inputs(norm_type=norm_type)
         elif self.is_input_patches:
-            raise NotImplementedError("PatchEmbed is not implemented")
+            self._init_patched_inputs(norm_type=norm_type)
+        
+        self._gradient_checkpointing = False
 
-        # 3. Define transformers blocks
+    def _init_continuous_input(self, norm_type):
+        conv_cls = nn.Conv2d
+        linear_cls = nn.Dense
+
+        self.norm = GroupNorm(num_groups=self.norm_num_groups, num_channels=self.in_channels, eps=1e-6, affine=True)
+        if self.use_linear_projection:
+            self.proj_in = linear_cls(self.in_channels, self.inner_dim)
+        else:
+            self.proj_in = conv_cls(self.in_channels, self.inner_dim, kernel_size=1, stride=1, padding=0, has_bias=True)
+        
         self.transformer_blocks = nn.CellList(
             [
                 BasicTransformerBlock(
-                    inner_dim,
-                    num_attention_heads,
-                    attention_head_dim,
-                    dropout=dropout,
-                    cross_attention_dim=cross_attention_dim,
-                    activation_fn=activation_fn,
-                    num_embeds_ada_norm=num_embeds_ada_norm,
-                    attention_bias=attention_bias,
-                    only_cross_attention=only_cross_attention,
-                    double_self_attention=double_self_attention,
-                    upcast_attention=upcast_attention,
+                    self.inner_dim,
+                    self.config.num_attention_heads,
+                    self.config.attention_head_dim,
+                    dropout=self.config.dropout,
+                    cross_attention_dim=self.config.cross_attention_dim,
+                    activation_fn=self.config.activation_fn,
+                    num_embeds_ada_norm=self.config.num_embeds_ada_norm,
+                    attention_bias=self.config.attention_bias,
+                    only_cross_attention=self.config.only_cross_attention,
+                    double_self_attention=self.config.double_self_attention,
+                    upcast_attention=self.config.upcast_attention,
                     norm_type=norm_type,
-                    norm_elementwise_affine=norm_elementwise_affine,
-                    norm_eps=norm_eps,
-                    attention_type=attention_type,
+                    norm_elementwise_affine=self.config.norm_elementwise_affine,
+                    norm_eps=self.config.norm_eps,
+                    attention_type=self.config.attention_type,
                 )
-                for d in range(num_layers)
+                for d in range(self.config.num_layers)
             ]
         )
 
-        # 4. Define output layers
-        self.out_channels = in_channels if out_channels is None else out_channels
-        if self.is_input_continuous:
-            # TODO: should use out_channels for continuous projections
-            if use_linear_projection:
-                self.proj_out = linear_cls(inner_dim, in_channels)
-            else:
-                self.proj_out = conv_cls(inner_dim, in_channels, kernel_size=1, stride=1, padding=0, has_bias=True)
+        # TODO: should use out_channels for continuous projections
+        if self.use_linear_projection:
+            self.proj_out = linear_cls(self.inner_dim, self.out_channels)
+        else:
+            self.proj_out = conv_cls(self.inner_dim, self.out_channels, kernel_size=1, stride=1, padding=0, has_bias=True)
 
-        # 5. PixArt-Alpha blocks.
+        # # 5. PixArt-Alpha blocks.
+        # self.adaln_single = None
+        # self.use_additional_conditions = False
+        # if norm_type == "ada_norm_single":
+        #     raise NotImplementedError("AdaLayerNormSingle is not implemented")
+
+        # self.caption_projection = None
+        # if caption_channels is not None:
+        #     raise NotImplementedError("PixArtAlphaTextProjection is not implemented")
+
+        # self._gradient_checkpointing = False
+
+    def _init_vectorized_inputs(self, norm_type):
+        raise NotImplementedError("ImagePositionalEmbeddings is not implemented")
+
+    def _init_patched_inputs(self, norm_type):
+        assert self.config.sample_size is not None, "Transformer2DModel over patched input must provide sample_size"
+
+        self.height = self.config.sample_size
+        self.width = self.config.sample_size
+
+        self.patch_size = self.config.patch_size
+        interpolation_scale = (
+            self.config.interpolation_scale
+            if self.config.interpolation_scale is not None
+            else max(self.config.sample_size // 64, 1)
+        )
+        self.pos_embed = PatchEmbed(
+            height=self.config.sample_size,
+            width=self.config.sample_size,
+            patch_size=self.config.patch_size,
+            in_channels=self.in_channels,
+            embed_dim=self.inner_dim,
+            interpolation_scale=interpolation_scale,
+        )
+
+        self.transformer_blocks = nn.CellList(
+            [
+                BasicTransformerBlock(
+                    self.inner_dim,
+                    self.config.num_attention_heads,
+                    self.config.attention_head_dim,
+                    dropout=self.config.dropout,
+                    cross_attention_dim=self.config.cross_attention_dim,
+                    activation_fn=self.config.activation_fn,
+                    num_embeds_ada_norm=self.config.num_embeds_ada_norm,
+                    attention_bias=self.config.attention_bias,
+                    only_cross_attention=self.config.only_cross_attention,
+                    double_self_attention=self.config.double_self_attention,
+                    upcast_attention=self.config.upcast_attention,
+                    norm_type=norm_type,
+                    norm_elementwise_affine=self.config.norm_elementwise_affine,
+                    norm_eps=self.config.norm_eps,
+                    attention_type=self.config.attention_type,
+                )
+                for _ in range(self.config.num_layers)
+            ]
+        )
+
+        if self.config.norm_type != "ada_norm_single":
+            self.norm_out = LayerNorm(self.inner_dim, elementwise_affine=False, eps=1e-6)
+            self.proj_out_1 = nn.Dense(self.inner_dim, 2 * self.inner_dim)
+            self.proj_out_2 = nn.Dense(
+                self.inner_dim, self.config.patch_size * self.config.patch_size * self.out_channels
+            )
+        elif self.config.norm_type == "ada_norm_single":
+            self.norm_out = LayerNorm(self.inner_dim, elementwise_affine=False, eps=1e-6)
+            self.scale_shift_table = ms.Parameter(ms.ops.randn(2, self.inner_dim) / self.inner_dim**0.5)
+            self.proj_out = nn.Dense(
+                self.inner_dim, self.config.patch_size * self.config.patch_size * self.out_channels
+            )
+
+        # PixArt-Alpha blocks.
         self.adaln_single = None
-        self.use_additional_conditions = False
-        if norm_type == "ada_norm_single":
-            raise NotImplementedError("AdaLayerNormSingle is not implemented")
+        if self.config.norm_type == "ada_norm_single":
+            # TODO(Sayak, PVP) clean this, for now we use sample size to determine whether to use
+            # additional conditions until we find better name
+            self.adaln_single = AdaLayerNormSingle(
+                self.inner_dim, use_additional_conditions=self.use_additional_conditions
+            )
 
         self.caption_projection = None
-        if caption_channels is not None:
-            raise NotImplementedError("PixArtAlphaTextProjection is not implemented")
-
-        self._gradient_checkpointing = False
+        if self.caption_channels is not None:
+            self.caption_projection = PixArtAlphaTextProjection(
+                in_features=self.caption_channels, hidden_size=self.inner_dim
+            )
 
     def _set_gradient_checkpointing(self, module, value=False):
         if hasattr(module, "gradient_checkpointing"):
@@ -298,18 +385,15 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
         # 1. Input
         if self.is_input_continuous:
-            batch, _, height, width = hidden_states.shape
+            batch_size, _, height, width = hidden_states.shape
             residual = hidden_states
-
-            hidden_states = self.norm(hidden_states)
-            if not self.use_linear_projection:
-                hidden_states = self.proj_in(hidden_states)
-                inner_dim = hidden_states.shape[1]
-                hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(batch, height * width, inner_dim)
-            else:
-                inner_dim = hidden_states.shape[1]
-                hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(batch, height * width, inner_dim)
-                hidden_states = self.proj_in(hidden_states)
+            hidden_states, inner_dim = self._operate_on_continuous_inputs(hidden_states)
+        # TODO: elif without else may be not supported in GRAPH MODE, change to else?
+        elif self.is_input_patches:
+            height, width = hidden_states.shape[-2] // self.patch_size, hidden_states.shape[-1] // self.patch_size
+            hidden_states, encoder_hidden_states, timestep, embedded_timestep = self._operate_on_patched_inputs(
+                hidden_states, encoder_hidden_states, timestep, added_cond_kwargs
+            )
 
         # 2. Blocks
         for block in self.transformer_blocks:
@@ -325,16 +409,100 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
         # 3. Output
         if self.is_input_continuous:
-            if not self.use_linear_projection:
-                hidden_states = hidden_states.reshape(batch, height, width, inner_dim).permute(0, 3, 1, 2)
-                hidden_states = self.proj_out(hidden_states)
-            else:
-                hidden_states = self.proj_out(hidden_states)
-                hidden_states = hidden_states.reshape(batch, height, width, inner_dim).permute(0, 3, 1, 2)
-
-            output = hidden_states + residual
+            output = self._get_output_for_continuous_inputs(
+                hidden_states=hidden_states,
+                residual=residual,
+                batch_size=batch_size,
+                height=height,
+                width=width,
+                inner_dim=inner_dim,
+            )
+        elif self.is_input_patches:
+            output = self._get_output_for_patched_inputs(
+                hidden_states=hidden_states,
+                timestep=timestep,
+                class_labels=class_labels,
+                embedded_timestep=embedded_timestep,
+                height=height,
+                width=width,
+            )
 
         if not return_dict:
             return (output,)
 
         return Transformer2DModelOutput(sample=output)
+
+    def _operate_on_continuous_inputs(self, hidden_states):
+        batch, _, height, width = hidden_states.shape
+        hidden_states = self.norm(hidden_states)
+
+        if not self.use_linear_projection:
+            hidden_states = self.proj_in(hidden_states)
+            inner_dim = hidden_states.shape[1]
+            hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(batch, height * width, inner_dim)
+        else:
+            inner_dim = hidden_states.shape[1]
+            hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(batch, height * width, inner_dim)
+            hidden_states = self.proj_in(hidden_states)
+        
+        return hidden_states, inner_dim
+
+    def _operate_on_patched_inputs(self, hidden_states, encoder_hidden_states, timestep, added_cond_kwargs):
+        batch_size = hidden_states.shape[0]
+        hidden_states = self.pos_embed(hidden_states)
+        embedded_timestep = None
+
+        if self.adaln_single is not None:
+            assert not (self.use_additional_conditions and added_cond_kwargs is None), \
+                "`added_cond_kwargs` cannot be None when using additional conditions for `adaln_single`."
+            timestep, embedded_timestep = self.adaln_single(
+                timestep, added_cond_kwargs, batch_size=batch_size, hidden_dtype=hidden_states.dtype
+            )
+
+        if self.caption_projection is not None:
+            encoder_hidden_states = self.caption_projection(encoder_hidden_states)
+            encoder_hidden_states = encoder_hidden_states.view(batch_size, -1, hidden_states.shape[-1])
+
+        return hidden_states, encoder_hidden_states, timestep, embedded_timestep
+
+    def _get_output_for_continuous_inputs(self, hidden_states, residual, batch_size, height, width, inner_dim):
+        if not self.use_linear_projection:
+            hidden_states = hidden_states.reshape(batch_size, height, width, inner_dim).permute(0, 3, 1, 2)
+            hidden_states = self.proj_out(hidden_states)
+        else:
+            hidden_states = self.proj_out(hidden_states)
+            hidden_states = hidden_states.reshape(batch_size, height, width, inner_dim).permute(0, 3, 1, 2)
+
+        output = hidden_states + residual
+
+        return output
+
+    def _get_output_for_patched_inputs(
+        self, hidden_states, timestep, class_labels, embedded_timestep, height=None, width=None
+    ):
+        if self.config.norm_type != "ada_norm_single":
+            conditioning = self.transformer_blocks[0].norm1.emb(
+                timestep, class_labels, hidden_dtype=hidden_states.dtype
+            )
+            shift, scale = self.proj_out_1(F.silu(conditioning)).chunk(2, dim=1)
+            hidden_states = self.norm_out(hidden_states) * (1 + scale[:, None]) + shift[:, None]
+            hidden_states = self.proj_out_2(hidden_states)
+        elif self.config.norm_type == "ada_norm_single":
+            shift, scale = (self.scale_shift_table[None] + embedded_timestep[:, None]).chunk(2, dim=1)
+            hidden_states = self.norm_out(hidden_states)
+            # Modulation
+            hidden_states = hidden_states * (1 + scale) + shift
+            hidden_states = self.proj_out(hidden_states)
+            hidden_states = hidden_states.squeeze(1)
+
+        # unpatchify
+        if self.adaln_single is None:
+            height = width = int(hidden_states.shape[1] ** 0.5)
+        hidden_states = hidden_states.reshape(
+            shape=(-1, height, width, self.patch_size, self.patch_size, self.out_channels)
+        )
+        hidden_states = torch.einsum("nhwpqc->nchpwq", hidden_states)
+        output = hidden_states.reshape(
+            shape=(-1, self.out_channels, height * self.patch_size, width * self.patch_size)
+        )
+        return output

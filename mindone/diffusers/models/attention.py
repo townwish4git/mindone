@@ -103,15 +103,24 @@ class BasicTransformerBlock(nn.Cell):
         super().__init__()
         self.only_cross_attention = only_cross_attention
 
-        assert norm_type == "layer_norm", f"Only layer_norm not supported, but got {norm_type}!"
+        # Only support layer_norm & ada_norm_single so far
+        assert norm_type in ("layer_norm", "ada_norm_single"), \
+            f"Only layer_norm & ada_norm_single supported, but got {norm_type}!"
+        
+        # We keep these boolean flags for backward-compatibility.
+        self.use_ada_layer_norm_zero = (num_embeds_ada_norm is not None) and norm_type == "ada_norm_zero"
+        self.use_ada_layer_norm = (num_embeds_ada_norm is not None) and norm_type == "ada_norm"
+        self.use_ada_layer_norm_single = norm_type == "ada_norm_single"
         self.use_layer_norm = norm_type == "layer_norm"
-        self.norm_type = norm_type
-        self.num_embeds_ada_norm = num_embeds_ada_norm
+        self.use_ada_layer_norm_continuous = norm_type == "ada_norm_continuous"
 
         if positional_embeddings and (num_positional_embeddings is None):
             raise ValueError(
                 "If `positional_embedding` type is defined, `num_positition_embeddings` must also be defined."
             )
+        
+        self.norm_type = norm_type
+        self.num_embeds_ada_norm = num_embeds_ada_norm
 
         if positional_embeddings == "sinusoidal":
             raise NotImplementedError("SinusoidalPositionalEmbedding is not implemented")
@@ -120,7 +129,15 @@ class BasicTransformerBlock(nn.Cell):
 
         # Define 3 blocks. Each block has its own normalization layer.
         # 1. Self-Attn
-        self.norm1 = LayerNorm(dim, eps=norm_eps, elementwise_affine=norm_elementwise_affine)
+        if norm_type == "ada_norm":
+            raise NotImplementedError("AdaLayerNorm is not implemented")
+        elif norm_type == "ada_norm_zero":
+            raise NotImplementedError("AdaLayerNormZero is not implemented")
+        elif norm_type == "ada_norm_continuous":
+            raise NotImplementedError("AdaLayerNormContinuous is not implemented")
+        else:
+            self.norm1 = LayerNorm(dim, eps=norm_eps, elementwise_affine=norm_elementwise_affine)
+        
         self.attn1 = Attention(
             query_dim=dim,
             heads=num_attention_heads,
@@ -137,7 +154,13 @@ class BasicTransformerBlock(nn.Cell):
             # We currently only use AdaLayerNormZero for self attention where there will only be one attention block.
             # I.e. the number of returned modulation chunks from AdaLayerZero would not make sense if returned during
             # the second cross attention block.
-            self.norm2 = LayerNorm(dim, eps=norm_eps, elementwise_affine=norm_elementwise_affine)
+            if norm_type == "ada_norm":
+                raise NotImplementedError("AdaLayerNorm is not implemented")
+            elif norm_type == "ada_norm_continuous":
+                raise NotImplementedError("AdaLayerNormContinuous is not implemented")
+            else:
+                self.norm2 = LayerNorm(dim, eps=norm_eps, elementwise_affine=norm_elementwise_affine)
+            
             self.attn2 = Attention(
                 query_dim=dim,
                 cross_attention_dim=cross_attention_dim if not double_self_attention else None,
@@ -153,7 +176,13 @@ class BasicTransformerBlock(nn.Cell):
             self.attn2 = None
 
         # 3. Feed-forward
-        self.norm3 = LayerNorm(dim, eps=norm_eps, elementwise_affine=norm_elementwise_affine)
+        if norm_type == "ada_norm_continuous":
+            raise NotImplementedError("AdaLayerNormContinuous is not implemented")
+        elif norm_type in ["ada_norm_zero", "ada_norm", "layer_norm", "ada_norm_continuous"]:
+            self.norm3 = LayerNorm(dim, eps=norm_eps, elementwise_affine=norm_elementwise_affine)
+        elif norm_type == "layer_norm_i2vgen":
+            self.norm3 = None
+
         self.ff = FeedForward(
             dim,
             dropout=dropout,
@@ -167,6 +196,10 @@ class BasicTransformerBlock(nn.Cell):
         if attention_type == "gated" or attention_type == "gated-text-image":
             raise NotImplementedError("GatedSelfAttentionDense is not implemented")
 
+        # 5. Scale-shift for PixArt-Alpha.
+        if norm_type == "ada_norm_single":
+            self.scale_shift_table = ms.Parameter(ops.randn(6, dim) / dim**0.5)
+        
         # let chunk size default to None
         self._chunk_size = None
         self._chunk_dim = 0
@@ -191,7 +224,19 @@ class BasicTransformerBlock(nn.Cell):
         # 0. Self-Attention
         batch_size = hidden_states.shape[0]  # noqa: F841
 
-        norm_hidden_states = self.norm1(hidden_states)
+        assert self.norm_type in ("layer_norm", "ada_norm_single"), \
+            f"Only layer_norm & ada_norm_single supported, but got {self.norm_type}!"
+
+        if self.norm_type == "layer_norm":
+            norm_hidden_states = self.norm1(hidden_states)
+        # TODO: elif without else may be not supported in GRAPH MODE, change to else?
+        elif self.norm_type == "ada_norm_single":
+            shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
+                self.scale_shift_table[None] + timestep.reshape(batch_size, 6, -1)
+            ).chunk(6, axis=1)
+            norm_hidden_states = self.norm1(hidden_states)
+            norm_hidden_states = norm_hidden_states * (1 + scale_msa) + shift_msa
+            norm_hidden_states = norm_hidden_states.squeeze(1)
 
         if self.pos_embed is not None:
             norm_hidden_states = self.pos_embed(norm_hidden_states)
@@ -211,6 +256,9 @@ class BasicTransformerBlock(nn.Cell):
             **cross_attention_kwargs,
         )
 
+        if self.norm_type == "ada_norm_single":
+            attn_output = gate_msa * attn_output
+
         hidden_states = attn_output + hidden_states
         if hidden_states.ndim == 4:
             hidden_states = hidden_states.squeeze(1)
@@ -221,7 +269,13 @@ class BasicTransformerBlock(nn.Cell):
 
         # 3. Cross-Attention
         if self.attn2 is not None:
-            norm_hidden_states = self.norm2(hidden_states)
+            if self.norm_type == "layer_norm":
+                norm_hidden_states = self.norm2(hidden_states)
+            # TODO: elif without else may be not supported in GRAPH MODE, change to else?
+            elif self.norm_type == "ada_norm_single":
+                # For PixArt norm2 isn't applied here:
+                # https://github.com/PixArt-alpha/PixArt-alpha/blob/0f55e922376d8b797edd44d25d0e7464b260dcab/diffusion/model/nets/PixArtMS.py#L70C1-L76C103
+                norm_hidden_states = hidden_states
 
             if self.pos_embed is not None and self.norm_type != "ada_norm_single":
                 norm_hidden_states = self.pos_embed(norm_hidden_states)
@@ -235,13 +289,21 @@ class BasicTransformerBlock(nn.Cell):
             hidden_states = attn_output + hidden_states
 
         # 4. Feed-forward
-        norm_hidden_states = self.norm3(hidden_states)
+        if not self.norm_type == "ada_norm_single":
+            norm_hidden_states = self.norm3(hidden_states)
+        
+        if self.norm_type == "ada_norm_single":
+            norm_hidden_states = self.norm2(hidden_states)
+            norm_hidden_states = norm_hidden_states * (1 + scale_mlp) + shift_mlp
 
         if self._chunk_size is not None:
             # "feed_forward_chunk_size" can be used to save memory
             ff_output = _chunked_feed_forward(self.ff, norm_hidden_states, self._chunk_dim, self._chunk_size)
         else:
             ff_output = self.ff(norm_hidden_states)
+        
+        if self.norm_type == "ada_norm_single":
+            ff_output = gate_mlp * ff_output
 
         hidden_states = ff_output + hidden_states
         if hidden_states.ndim == 4:
