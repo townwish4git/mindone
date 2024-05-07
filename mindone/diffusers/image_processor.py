@@ -111,7 +111,7 @@ class VaeImageProcessor(ConfigMixin):
     @staticmethod
     def numpy_to_pt(images: np.ndarray) -> ms.Tensor:
         """
-        Convert a NumPy image to a PyTorch tensor.
+        Convert a NumPy image to a MindSpore tensor.
         """
         if images.ndim == 3:
             images = images[..., None]
@@ -122,7 +122,7 @@ class VaeImageProcessor(ConfigMixin):
     @staticmethod
     def pt_to_numpy(images: ms.Tensor) -> np.ndarray:
         """
-        Convert a PyTorch tensor to a NumPy image.
+        Convert a MindSpore tensor to a NumPy image.
         """
         images = images.permute(0, 2, 3, 1).float().numpy()
         return images
@@ -339,7 +339,7 @@ class VaeImageProcessor(ConfigMixin):
 
         Args:
             image (`PIL.Image.Image`, `np.ndarray` or `ms.Tensor`):
-                The image input, can be a PIL image, numpy array or pytorch tensor.
+                The image input, can be a PIL image, numpy array or MindSpore tensor.
             height (`int`):
                 The height to resize to.
             width (`int`):
@@ -412,8 +412,8 @@ class VaeImageProcessor(ConfigMixin):
 
         Args:
             image(`PIL.Image.Image`, `np.ndarray` or `ms.Tensor`):
-                The image input, can be a PIL image, numpy array or pytorch tensor. if it is a numpy array, should have
-                shape `[batch, height, width]` or `[batch, height, width, channel]` if it is a pytorch tensor, should
+                The image input, can be a PIL image, numpy array or MindSpore tensor. if it is a numpy array, should have
+                shape `[batch, height, width]` or `[batch, height, width, channel]` if it is a MindSpore tensor, should
                 have shape `[batch, channel, height, width]`.
             height (`int`, *optional*, defaults to `None`):
                 The height in preprocessed image. If `None`, will use the height of `image` input.
@@ -456,7 +456,7 @@ class VaeImageProcessor(ConfigMixin):
 
         Args:
             image (`pipeline_image_input`):
-                The image input, accepted formats are PIL images, NumPy arrays, PyTorch tensors; Also accept list of supported formats.
+                The image input, accepted formats are PIL images, NumPy arrays, MindSpore tensors; Also accept list of supported formats.
             height (`int`, *optional*, defaults to `None`):
                 The height in preprocessed image. If `None`, will use the `get_default_height_width()` to get default height.
             width (`int`, *optional*`, defaults to `None`):
@@ -474,10 +474,10 @@ class VaeImageProcessor(ConfigMixin):
         """
         supported_formats = (PIL.Image.Image, np.ndarray, ms.Tensor)
 
-        # Expand the missing dimension for 3-dimensional pytorch tensor or numpy array that represents grayscale image
+        # Expand the missing dimension for 3-dimensional MindSpore tensor or numpy array that represents grayscale image
         if self.config.do_convert_grayscale and isinstance(image, (ms.Tensor, np.ndarray)) and image.ndim == 3:
             if isinstance(image, ms.Tensor):
-                # if image is a pytorch tensor could have 2 possible shapes:
+                # if image is a MindSpore tensor could have 2 possible shapes:
                 #    1. batch x height x width: we should insert the channel dimension at position 1
                 #    2. channnel x height x width: we should insert batch dimension at position 0,
                 #       however, since both channel and batch dimension has same size 1, it is same to insert at position 1
@@ -540,8 +540,8 @@ class VaeImageProcessor(ConfigMixin):
         do_normalize = self.config.do_normalize
         if do_normalize and image.min() < 0:
             warnings.warn(
-                "Passing `image` as torch tensor with value range in [-1,1] is deprecated. The expected value range for image tensor is [0,1] "
-                f"when passing as pytorch tensor or numpy Array. You passed `image` with value range [{image.min()},{image.max()}]",
+                "Passing `image` as MindSpore tensor with value range in [-1,1] is deprecated. The expected value range for image tensor is [0,1] "
+                f"when passing as MindSpore tensor or numpy Array. You passed `image` with value range [{image.min()},{image.max()}]",
                 FutureWarning,
             )
             do_normalize = False
@@ -565,7 +565,7 @@ class VaeImageProcessor(ConfigMixin):
 
         Args:
             image (`ms.Tensor`):
-                The image input, should be a pytorch tensor with shape `B x C x H x W`.
+                The image input, should be a MindSpore tensor with shape `B x C x H x W`.
             output_type (`str`, *optional*, defaults to `pil`):
                 The output type of the image, can be one of `pil`, `np`, `pt`, `latent`.
             do_denormalize (`List[bool]`, *optional*, defaults to `None`):
@@ -578,7 +578,7 @@ class VaeImageProcessor(ConfigMixin):
         """
         if not isinstance(image, ms.Tensor):
             raise ValueError(
-                f"Input for postprocessing is in incorrect format: {type(image)}. We only support pytorch tensor"
+                f"Input for postprocessing is in incorrect format: {type(image)}. We only support MindSpore tensor"
             )
         if output_type not in ["latent", "pt", "np", "pil"]:
             deprecation_message = (
@@ -643,3 +643,78 @@ class VaeImageProcessor(ConfigMixin):
         image = image.convert("RGB")
 
         return image
+
+
+class PixArtImageProcessor(VaeImageProcessor):
+    """
+    Image processor for PixArt image resize and crop.
+
+    Args:
+        do_resize (`bool`, *optional*, defaults to `True`):
+            Whether to downscale the image's (height, width) dimensions to multiples of `vae_scale_factor`. Can accept
+            `height` and `width` arguments from [`image_processor.VaeImageProcessor.preprocess`] method.
+        vae_scale_factor (`int`, *optional*, defaults to `8`):
+            VAE scale factor. If `do_resize` is `True`, the image is automatically resized to multiples of this factor.
+        resample (`str`, *optional*, defaults to `lanczos`):
+            Resampling filter to use when resizing the image.
+        do_normalize (`bool`, *optional*, defaults to `True`):
+            Whether to normalize the image to [-1,1].
+        do_binarize (`bool`, *optional*, defaults to `False`):
+            Whether to binarize the image to 0/1.
+        do_convert_rgb (`bool`, *optional*, defaults to be `False`):
+            Whether to convert the images to RGB format.
+        do_convert_grayscale (`bool`, *optional*, defaults to be `False`):
+            Whether to convert the images to grayscale format.
+    """
+
+    @register_to_config
+    def __init__(
+        self,
+        do_resize: bool = True,
+        vae_scale_factor: int = 8,
+        resample: str = "lanczos",
+        do_normalize: bool = True,
+        do_binarize: bool = False,
+        do_convert_grayscale: bool = False,
+    ):
+        super().__init__(
+            do_resize=do_resize,
+            vae_scale_factor=vae_scale_factor,
+            resample=resample,
+            do_normalize=do_normalize,
+            do_binarize=do_binarize,
+            do_convert_grayscale=do_convert_grayscale,
+        )
+
+    @staticmethod
+    def classify_height_width_bin(height: int, width: int, ratios: dict) -> Tuple[int, int]:
+        """Returns binned height and width."""
+        ar = float(height / width)
+        closest_ratio = min(ratios.keys(), key=lambda ratio: abs(float(ratio) - ar))
+        default_hw = ratios[closest_ratio]
+        return int(default_hw[0]), int(default_hw[1])
+
+    @staticmethod
+    def resize_and_crop_tensor(samples: ms.Tensor, new_width: int, new_height: int) -> ms.Tensor:
+        orig_height, orig_width = samples.shape[2], samples.shape[3]
+
+        # Check if resizing is needed
+        if orig_height != new_height or orig_width != new_width:
+            ratio = max(new_height / orig_height, new_width / orig_width)
+            resized_width = int(orig_width * ratio)
+            resized_height = int(orig_height * ratio)
+
+            # Resize
+            # FIXME: bilinear maybe not supported
+            samples = ops.interpolate(
+                samples, size=(resized_height, resized_width), mode="bilinear", align_corners=False
+            )
+
+            # Center Crop
+            start_x = (resized_width - new_width) // 2
+            end_x = start_x + new_width
+            start_y = (resized_height - new_height) // 2
+            end_y = start_y + new_height
+            samples = samples[:, :, start_y:end_y, start_x:end_x]
+
+        return samples

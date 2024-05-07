@@ -16,6 +16,10 @@ _import_structure = {
         "DiffusionPipeline",
         "ImagePipelineOutput",
     ],
+    "pixart_alpha": [
+        "PixArtAlphaPipeline",
+        "PixArtSigmaPipeline",
+    ],
 }
 
 if TYPE_CHECKING:
@@ -24,6 +28,7 @@ if TYPE_CHECKING:
     from .pipeline_utils import DiffusionPipeline, ImagePipelineOutput
     from .stable_diffusion import StableDiffusionPipeline
     from .stable_diffusion_xl import StableDiffusionXLPipeline
+    from .pixart_alpha import PixArtAlphaPipeline, PixArtSigmaPipeline
 else:
     import sys
 
