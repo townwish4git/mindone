@@ -380,7 +380,9 @@ class MaskConditionEncoder(nn.Cell):
                 )
             in_ch_ = out_ch_
 
-        self.layers = nn.SequentialCell(*layers)
+        # nn.SequentialCell does not support the len(self.layers) method nor does it support self.layers[l],
+        # therefore, we use nn.CellList instead.
+        self.layers = nn.CellList(layers)
 
     def construct(self, x: ms.Tensor, mask=None) -> ms.Tensor:
         r"""The forward method of the `MaskConditionEncoder` class."""

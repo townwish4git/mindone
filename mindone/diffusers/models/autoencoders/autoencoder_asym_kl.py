@@ -13,6 +13,8 @@
 # limitations under the License.
 from typing import Optional, Tuple, Union
 
+import numpy as np
+
 import mindspore as ms
 from mindspore import nn
 
@@ -138,6 +140,7 @@ class AsymmetricAutoencoderKL(ModelMixin, ConfigMixin):
     def decode(
         self,
         z: ms.Tensor,
+        generator: Optional[np.random.Generator] = None,
         image: Optional[ms.Tensor] = None,
         mask: Optional[ms.Tensor] = None,
         return_dict: bool = False,
