@@ -20,6 +20,7 @@ from mindspore import nn, ops
 
 from ...configuration_utils import ConfigMixin, register_to_config
 from ...utils import BaseOutput, logging
+from ..activations import SiLU
 from ..attention_processor import Attention, AttentionProcessor, AttnProcessor
 from ..embeddings import TimestepEmbedding, Timesteps
 from ..modeling_utils import ModelMixin
@@ -139,7 +140,7 @@ class Kandinsky3UNet(ModelMixin, ConfigMixin):
         self.up_blocks = nn.CellList(self.up_blocks)
 
         self.conv_norm_out = GroupNorm(groups, init_channels)
-        self.conv_act_out = nn.SiLU()
+        self.conv_act_out = SiLU()
         self.conv_out = nn.Conv2d(init_channels, out_channels, kernel_size=3, pad_mode="pad", padding=1, has_bias=True)
 
     @property
@@ -389,7 +390,7 @@ class Kandinsky3ConditionalGroupNorm(nn.Cell):
         super().__init__()
         self.norm = GroupNorm(groups, normalized_shape, affine=False)
         self.context_mlp = nn.SequentialCell(
-            nn.SiLU(), nn.Dense(context_dim, 2 * normalized_shape, weight_init="zeros", bias_init="zeros")
+            SiLU(), nn.Dense(context_dim, 2 * normalized_shape, weight_init="zeros", bias_init="zeros")
         )
 
     def construct(self, x, context):
@@ -407,7 +408,7 @@ class Kandinsky3Block(nn.Cell):
     def __init__(self, in_channels, out_channels, time_embed_dim, kernel_size=3, norm_groups=32, up_resolution=None):
         super().__init__()
         self.group_norm = Kandinsky3ConditionalGroupNorm(norm_groups, in_channels, time_embed_dim)
-        self.activation = nn.SiLU()
+        self.activation = SiLU()
         if up_resolution is not None and up_resolution:
             self.up_sample = nn.Conv2dTranspose(
                 in_channels, in_channels, kernel_size=2, stride=2, pad_mode="pad", has_bias=True
@@ -516,7 +517,7 @@ class Kandinsky3AttentionBlock(nn.Cell):
         self.out_norm = Kandinsky3ConditionalGroupNorm(norm_groups, num_channels, time_embed_dim)
         self.feed_forward = nn.SequentialCell(
             nn.Conv2d(num_channels, hidden_channels, kernel_size=1, has_bias=False),
-            nn.SiLU(),
+            SiLU(),
             nn.Conv2d(hidden_channels, num_channels, kernel_size=1, has_bias=False),
         )
 
