@@ -733,7 +733,7 @@ class ControlNetModel(ModelMixin, ConfigMixin):
                         f"which requires the keyword argument `time_ids` to be passed in `added_cond_kwargs`"
                     )
                 time_ids = added_cond_kwargs.get("time_ids")
-                time_embeds = self.add_time_proj(time_ids.flatten())
+                time_embeds = self.add_time_proj(time_ids.flatten()).to(time_ids.dtype)
                 time_embeds = time_embeds.reshape((text_embeds.shape[0], -1))
 
                 add_embeds = ops.concat([text_embeds, time_embeds], axis=-1)
