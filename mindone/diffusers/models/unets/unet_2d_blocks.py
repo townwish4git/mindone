@@ -1510,7 +1510,7 @@ class AttnDownEncoderBlock2D(nn.Cell):
         else:
             self.downsamplers = None
 
-    def construct(self, hidden_states: ms.Tensor, *args, **kwargs) -> ms.Tensor:
+    def construct(self, hidden_states: ms.Tensor) -> ms.Tensor:
         for resnet, attn in zip(self.resnets, self.attentions):
             hidden_states = resnet(hidden_states, temb=None)
             hidden_states = attn(hidden_states)
@@ -1611,8 +1611,6 @@ class AttnSkipDownBlock2D(nn.Cell):
         hidden_states: ms.Tensor,
         temb: Optional[ms.Tensor] = None,
         skip_sample: Optional[ms.Tensor] = None,
-        *args,
-        **kwargs,
     ) -> Tuple[ms.Tensor, Tuple[ms.Tensor, ...], ms.Tensor]:
         output_states = ()
 
@@ -1700,8 +1698,6 @@ class SkipDownBlock2D(nn.Cell):
         hidden_states: ms.Tensor,
         temb: Optional[ms.Tensor] = None,
         skip_sample: Optional[ms.Tensor] = None,
-        *args,
-        **kwargs,
     ) -> Tuple[ms.Tensor, Tuple[ms.Tensor, ...], ms.Tensor]:
         output_states = ()
 
@@ -1787,7 +1783,9 @@ class ResnetDownsampleBlock2D(nn.Cell):
         self.has_cross_attention = False
 
     def construct(
-        self, hidden_states: ms.Tensor, temb: Optional[ms.Tensor] = None, **kwargs  # *args, **kwargs
+        self,
+        hidden_states: ms.Tensor,
+        temb: Optional[ms.Tensor] = None,
     ) -> Tuple[ms.Tensor, Tuple[ms.Tensor, ...]]:
         output_states = ()
 
@@ -1991,7 +1989,9 @@ class KDownBlock2D(nn.Cell):
         self.has_cross_attention = False
 
     def construct(
-        self, hidden_states: ms.Tensor, temb: Optional[ms.Tensor] = None, *args, **kwargs
+        self,
+        hidden_states: ms.Tensor,
+        temb: Optional[ms.Tensor] = None,
     ) -> Tuple[ms.Tensor, Tuple[ms.Tensor, ...]]:
         output_states = ()
 
@@ -2751,8 +2751,6 @@ class AttnSkipUpBlock2D(nn.Cell):
         res_hidden_states_tuple: Tuple[ms.Tensor, ...],
         temb: Optional[ms.Tensor] = None,
         skip_sample=None,
-        *args,
-        **kwargs,
     ) -> Tuple[ms.Tensor, ms.Tensor]:
         for resnet in self.resnets:
             # pop res hidden states
@@ -2863,8 +2861,6 @@ class SkipUpBlock2D(nn.Cell):
         res_hidden_states_tuple: Tuple[ms.Tensor, ...],
         temb: Optional[ms.Tensor] = None,
         skip_sample=None,
-        *args,
-        **kwargs,
     ) -> Tuple[ms.Tensor, ms.Tensor]:
         for resnet in self.resnets:
             # pop res hidden states
@@ -2967,8 +2963,6 @@ class ResnetUpsampleBlock2D(nn.Cell):
         res_hidden_states_tuple: Tuple[ms.Tensor, ...],
         temb: Optional[ms.Tensor] = None,
         upsample_size: Optional[int] = None,
-        # *args,
-        **kwargs,
     ) -> ms.Tensor:
         for resnet in self.resnets:
             # pop res hidden states
@@ -3186,8 +3180,6 @@ class KUpBlock2D(nn.Cell):
         res_hidden_states_tuple: Tuple[ms.Tensor, ...],
         temb: Optional[ms.Tensor] = None,
         upsample_size: Optional[int] = None,
-        *args,
-        **kwargs,
     ) -> ms.Tensor:
         res_hidden_states_tuple = res_hidden_states_tuple[-1]
         if res_hidden_states_tuple is not None:

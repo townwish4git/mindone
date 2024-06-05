@@ -985,8 +985,6 @@ class DownBlockMotion(nn.Cell):
         hidden_states: ms.Tensor,
         temb: Optional[ms.Tensor] = None,
         num_frames: int = 1,
-        # *args,
-        **kwargs,
     ) -> Union[ms.Tensor, Tuple[ms.Tensor, ...]]:
         output_states = ()
 
@@ -1404,8 +1402,6 @@ class UpBlockMotion(nn.Cell):
         temb: Optional[ms.Tensor] = None,
         upsample_size=None,
         num_frames: int = 1,
-        # *args,
-        **kwargs,
     ) -> ms.Tensor:
         is_freeu_enabled = (
             getattr(self, "s1", None)
