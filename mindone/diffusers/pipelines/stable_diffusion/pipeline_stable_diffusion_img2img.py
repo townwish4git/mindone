@@ -1061,7 +1061,7 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline, LoraLoaderMixin):
 
         if not output_type == "latent":
             latents = (latents / self.vae.config.scaling_factor).to(self.vae.dtype)
-            image = self.vae.decode(latents, return_dict=False)[0]
+            image = self.vae.decode(latents, return_dict=False, generator=generator)[0]
             image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
         else:
             image = latents

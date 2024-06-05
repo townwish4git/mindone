@@ -1240,7 +1240,7 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, StableDiffusionXLLoraL
                 latents = latents / self.vae.config.scaling_factor
             latents = latents.to(self.vae.dtype)
 
-            image = self.vae.decode(latents, return_dict=False)[0]
+            image = self.vae.decode(latents, return_dict=False, generator=generator)[0]
 
             # cast back to fp16 if needed
             if needs_upcasting:

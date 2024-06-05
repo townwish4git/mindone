@@ -13,6 +13,8 @@
 # limitations under the License.
 from typing import Dict, Optional, Tuple, Union
 
+import numpy as np
+
 import mindspore as ms
 from mindspore import nn
 
@@ -228,7 +230,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
 
         return DecoderOutput(sample=dec)
 
-    def decode(self, z: ms.Tensor, return_dict: bool = False) -> Union[DecoderOutput, Tuple[ms.Tensor]]:
+    def decode(self, z: ms.Tensor, return_dict: bool = False, generator=None) -> Union[DecoderOutput, Tuple[ms.Tensor]]:
         """
         Decode a batch of images.
 
@@ -255,6 +257,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
         sample: ms.Tensor,
         sample_posterior: bool = False,
         return_dict: bool = False,
+        generator: Optional[np.random.Generator] = None,
     ) -> Union[DecoderOutput, Tuple[ms.Tensor]]:
         r"""
         Args:
