@@ -1034,7 +1034,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin,
             copied_cross_attention_kwargs = {}
             for k, v in cross_attention_kwargs.items():
                 if k == "gligen":
-                    copied_cross_attention_kwargs[k] = {"obj": self.position_net(**v)}
+                    copied_cross_attention_kwargs[k] = {"objs": self.position_net(**v)}
                 else:
                     copied_cross_attention_kwargs[k] = v
             cross_attention_kwargs = copied_cross_attention_kwargs

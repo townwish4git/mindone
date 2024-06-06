@@ -652,7 +652,7 @@ def get_fourier_embeds_from_boundingbox(embed_dim, box):
 
     batch_size, num_boxes = box.shape[:2]
 
-    emb = 100 ** (ops.arange(embed_dim) / embed_dim)
+    emb = 100 ** (ops.arange(embed_dim).to(dtype=box.dtype) / embed_dim)
     emb = emb[None, None, None].to(dtype=box.dtype)
     emb = emb * box.unsqueeze(-1)
 
