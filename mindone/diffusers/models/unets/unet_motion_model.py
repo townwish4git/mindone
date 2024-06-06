@@ -440,6 +440,10 @@ class UNetMotionModel(ModelMixin, ConfigMixin):
 
         model = cls.from_config(config)
 
+        # Move dtype conversion code here to avoid dtype mismatch issues when loading weights
+        # ensure that the Motion UNet is the same dtype as the UNet2DConditionModel
+        model.to(unet.dtype)
+
         if not load_weights:
             return model
 
@@ -480,9 +484,6 @@ class UNetMotionModel(ModelMixin, ConfigMixin):
 
         if has_motion_adapter:
             model.load_motion_modules(motion_adapter)
-
-        # ensure that the Motion UNet is the same dtype as the UNet2DConditionModel
-        model.to(unet.dtype)
 
         return model
 
