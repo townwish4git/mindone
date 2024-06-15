@@ -5,19 +5,20 @@ import os
 import shutil
 from pathlib import Path
 
+import datasets
 import numpy as np
 import yaml
 from datasets import disable_caching, load_dataset
 from tqdm.auto import tqdm
 
 import mindspore as ms
-from mindspore import context, nn, ops
-from mindspore.amp import DynamicLossScaler, LossScaler, StaticLossScaler, all_finite
+from mindspore import nn, ops
+from mindspore.amp import StaticLossScaler
 from mindspore.dataset import GeneratorDataset, transforms, vision
 
 from mindone.diffusers import DDPMPipeline, DDPMScheduler, UNet2DModel
 from mindone.diffusers.optimization import get_scheduler
-from mindone.diffusers.training_utils import init_distributed_device, is_master
+from mindone.diffusers.training_utils import AttrJitWrapper, TrainStep, init_distributed_device, is_master
 
 logger = logging.getLogger(__name__)
 
@@ -236,11 +237,7 @@ def parse_args():
     def error_template(feature, flag):
         return f"{feature} is not yet supported, please do not set --{flag}"
 
-    assert args.gradient_accumulation_steps == 1, error_template("Gradient Accumulation", "gradient_accumulation_steps")
     assert args.use_ema is False, error_template("Exponential Moving Average", "use_ema")
-    assert args.enable_xformers_memory_efficient_attention is False, error_template(
-        "Memory Efficient Attention from 'xformers'", "enable_xformers_memory_efficient_attention"
-    )
     if args.push_to_hub is True:
         raise ValueError(
             "You cannot use --push_to_hub due to a security risk of uploading your data to huggingface-hub. "
@@ -263,6 +260,7 @@ def main():
         datefmt="%m/%d/%Y %H:%M:%S",
         level=logging.INFO,
     )
+    datasets.utils.logging.get_logger().propagate = False
 
     # Handle the repository creation
     if is_master(args):
@@ -304,6 +302,9 @@ def main():
         weight_dtype = ms.float16
     elif args.mixed_precision == "bf16":
         weight_dtype = ms.bfloat16
+
+    if args.enable_xformers_memory_efficient_attention:
+        unet.enable_xformers_memory_efficient_attention()
 
     # Initialize the scheduler
     noise_scheduler = DDPMScheduler(
@@ -377,8 +378,8 @@ def main():
     lr_scheduler = get_scheduler(
         args.lr_scheduler,
         args.learning_rate,
-        num_warmup_steps=args.lr_warmup_steps * args.gradient_accumulation_steps,
-        num_training_steps=(len(train_dataloader) * args.num_epochs),
+        num_warmup_steps=args.lr_warmup_steps,
+        num_training_steps=math.ceil(len(train_dataloader) / args.gradient_accumulation_steps) * args.num_epochs,
     )
 
     # Initialize the optimizer
@@ -408,11 +409,12 @@ def main():
         else:
             logger.warning(f"Tracker {tracker_name} is not implemented, omitting...")
 
-    train_step = TrainStep(
+    train_step = TrainStepForGen(
         unet=unet,
         optimizer=optimizer,
-        scaler=StaticLossScaler(65536),
         noise_scheduler=noise_scheduler,
+        weight_dtype=weight_dtype,
+        length_of_dataloader=len(train_dataloader),
         args=args,
     ).set_train()
 
@@ -445,7 +447,7 @@ def main():
             # Get the most recent checkpoint
             dirs = os.listdir(args.output_dir)
             dirs = [d for d in dirs if d.startswith("checkpoint")]
-            dirs = sorted(dirs, key=lambda x: int(x.split("-")[1].split(".")[0]))
+            dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
             path = dirs[-1] if len(dirs) > 0 else None
 
         if path is None:
@@ -455,30 +457,32 @@ def main():
         else:
             if is_master(args):
                 logger.info(f"Resuming from checkpoint {path}")
-            state_dict = ms.load_checkpoint(os.path.join(args.output_dir, path))
-            ms.load_param_into_net(unet, state_dict)
-            global_step = int(path.split("-")[1].split(".")[0])
+            # TODO: load optimizer & grad scaler etc. like accelerator.load_state
+            input_model_file = os.path.join(args.output_dir, path, "pytorch_model.ckpt")
+            ms.load_param_into_net(unet, ms.load_checkpoint(input_model_file))
+            global_step = int(path.split("-")[1])
 
             resume_global_step = global_step * args.gradient_accumulation_steps
             first_epoch = global_step // num_update_steps_per_epoch
             resume_step = resume_global_step % (num_update_steps_per_epoch * args.gradient_accumulation_steps)
 
     # Train!
+    train_dataloader_iter = train_dataloader.create_tuple_iterator(num_epochs=args.num_epochs - first_epoch)
     for epoch in range(first_epoch, args.num_epochs):
         unet.set_train(True)
         progress_bar = tqdm(total=num_update_steps_per_epoch, disable=not is_master(args))
         progress_bar.set_description(f"Epoch {epoch}")
-        for step, batch in enumerate(train_dataloader.create_tuple_iterator()):
+        for step, batch in enumerate(train_dataloader_iter):
             # Skip steps until we reach the resumed step
             if args.resume_from_checkpoint and epoch == first_epoch and step < resume_step:
                 if step % args.gradient_accumulation_steps == 0:
                     progress_bar.update(1)
                 continue
 
-            loss = train_step(*batch)
+            loss, model_pred = train_step(*batch)
 
             # Checks if the train_step has performed an optimization step behind the scenes
-            if step % args.gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
+            if train_step.sync_gradients:
                 progress_bar.update(1)
                 global_step += 1
 
@@ -488,7 +492,7 @@ def main():
                         if args.checkpoints_total_limit is not None:
                             checkpoints = os.listdir(args.output_dir)
                             checkpoints = [d for d in checkpoints if d.startswith("checkpoint")]
-                            checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]).split(".")[0])
+                            checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
 
                             # before we save the new checkpoint, we need to have at _most_ `checkpoints_total_limit - 1` checkpoints
                             if len(checkpoints) >= args.checkpoints_total_limit:
@@ -505,7 +509,10 @@ def main():
                                     shutil.rmtree(removing_checkpoint)
 
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                        ms.save_checkpoint(unet, save_path)
+                        # TODO: save optimizer & grad scaler etc. like accelerator.save_state
+                        os.makedirs(save_path, exist_ok=True)
+                        output_model_file = os.path.join(save_path, "pytorch_model.ckpt")
+                        ms.save_checkpoint(unet, output_model_file)
                         logger.info(f"Saved state to {save_path}")
 
             logs = {"loss": loss.numpy().item(), "lr": optimizer.get_lr().numpy().item(), "step": global_step}
@@ -547,51 +554,30 @@ def main():
             tracker.close()
 
 
-class TrainStep(nn.Cell):
+class TrainStepForGen(TrainStep):
     def __init__(
         self,
         unet: nn.Cell,
         optimizer: nn.Optimizer,
-        scaler: LossScaler,
         noise_scheduler,
+        weight_dtype,
+        length_of_dataloader,
         args,
     ):
-        super().__init__()
-        self.unet = unet.set_grad()
-        self.optimizer = optimizer
-        self.weights = optimizer.parameters
-        self.scaler = scaler
-        if isinstance(self.scaler, StaticLossScaler):
-            self.drop_overflow = False
-        elif isinstance(self.scaler, DynamicLossScaler):
-            self.drop_overflow = True
-        else:
-            raise NotImplementedError(f"Unsupported scaler: {type(self.scaler)}")
-        self.parallel_mode = context.get_auto_parallel_context("parallel_mode")
-        if self.parallel_mode == context.ParallelMode.STAND_ALONE:
-            self.grad_reducer = nn.Identity()
-        elif self.parallel_mode in (context.ParallelMode.DATA_PARALLEL, context.ParallelMode.HYBRID_PARALLEL):
-            self.grad_reducer = nn.DistributedGradReducer(self.weights)
-        else:
-            raise NotImplementedError(f"When creating reducer, Got Unsupported parallel mode: {self.parallel_mode}")
-        if isinstance(unet, nn.Cell) and unet.jit_config_dict:
-            self._jit_config_dict = unet.jit_config_dict
-        self.clip_grad = True
-        self.clip_value = 1.0
-
-        @ms.jit_class
-        class ArgsJitWrapper:
-            def __init__(self, **kwargs):
-                for name in kwargs:
-                    setattr(self, name, kwargs[name])
-
-        self.args = ArgsJitWrapper(**vars(args))
-        self.weight_dtype = {"fp16": ms.float16, "bf16": ms.bfloat16}.get(args.mixed_precision, ms.float32)
+        super().__init__(
+            unet,
+            optimizer,
+            StaticLossScaler(65536),
+            1.0,
+            args.gradient_accumulation_steps,
+            gradient_accumulation_kwargs=dict(length_of_dataloader=length_of_dataloader),
+        )
+        self.unet = self.model
         self.noise_scheduler = noise_scheduler
         self.noise_scheduler_num_train_timesteps = noise_scheduler.config.num_train_timesteps
         self.noise_scheduler_prediction_type = noise_scheduler.config.prediction_type
-
-        self.forward_and_backward = ops.value_and_grad(self.forward, None, weights=self.weights, has_aux=True)
+        self.weight_dtype = weight_dtype
+        self.args = AttrJitWrapper(**vars(args))
 
     def forward(self, images):
         clean_images = images.to(self.weight_dtype)
@@ -622,31 +608,8 @@ class TrainStep(nn.Cell):
         else:
             raise ValueError(f"Unsupported prediction type: {self.noise_scheduler_prediction_type}")
 
-        loss = self.scaler.scale(loss)
+        loss = self.scale_loss(loss)
         return loss, model_pred
-
-    def update(self, loss, grads):
-        if self.clip_grad:
-            loss = ops.depend(loss, self.optimizer(ops.clip_by_global_norm(grads, clip_norm=self.clip_value)))
-        else:
-            loss = ops.depend(loss, self.optimizer(grads))
-        return loss
-
-    def construct(self, *inputs):
-        (loss, model_pred), grads = self.forward_and_backward(*inputs)
-        grads = self.grad_reducer(grads)
-        loss = self.scaler.unscale(loss)
-        grads = self.scaler.unscale(grads)
-
-        if self.drop_overflow:
-            status = all_finite(grads)
-            if status:
-                loss = self.update(loss, grads)
-            loss = ops.depend(loss, self.scaler.adjust(status))
-        else:
-            loss = self.update(loss, grads)
-
-        return loss
 
 
 if __name__ == "__main__":

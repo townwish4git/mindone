@@ -102,9 +102,8 @@ Most base, utility and mixin class are available.
 - [x] UNet2DConditionModel
 
 ### Scheduler
-- [x] DDIMScheduler
-- [x] DDPMScheduler
-- [x] EulerDiscreteScheduler
+- [x] DDIMScheduler/DDPMScheduler/...(30)
+- [ ] DPMSolverSDEScheduler
 
 ### Loader
 - [ ] LoRA

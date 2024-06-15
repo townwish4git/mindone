@@ -59,6 +59,7 @@ LOADABLE_CLASSES = {
     "transformers": {
         "MSPreTrainedModel": ["save_pretrained", "from_pretrained"],
         "PreTrainedTokenizer": ["save_pretrained", "from_pretrained"],
+        "PreTrainedTokenizerFast": ["save_pretrained", "from_pretrained"],
         "ImageProcessingMixin": ["save_pretrained", "from_pretrained"],
     },
 }
@@ -206,6 +207,10 @@ def warn_deprecated_model_variant(pretrained_model_name_or_path, token, variant,
 
 def _unwrap_model(model):
     """Unwraps a model."""
+    from mindone.diffusers._peft import PeftModel
+
+    if isinstance(model, PeftModel):
+        model = model.base_model.model
     return model
 
 

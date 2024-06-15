@@ -1,9 +1,17 @@
 import argparse
 import logging
 import os
+import sys
 
 import yaml
+
+__dir__ = os.path.dirname(os.path.abspath(__file__))
+mindone_lib_path = os.path.abspath(os.path.join(__dir__, "../../../"))
+sys.path.insert(0, mindone_lib_path)
+
 from opensora.utils.model_utils import _check_cfgs_in_parser, str2bool
+
+from mindone.utils.misc import to_abspath
 
 logger = logging.getLogger()
 
@@ -32,13 +40,16 @@ def parse_train_args(parser):
         "--caption_column", default="caption", type=str, help="name of column for captions saved in csv file"
     )
     parser.add_argument("--video_folder", default="", type=str, help="root dir for the video data")
-    parser.add_argument("--text_embed_folder", default="", type=str, help="root dir for the text embeding data")
-    parser.add_argument("--vae_latent_folder", default="", type=str, help="root dir for the vae latent data")
+    parser.add_argument("--text_embed_folder", type=str, help="root dir for the text embeding data")
+    parser.add_argument("--vae_latent_folder", type=str, help="root dir for the vae latent data")
     parser.add_argument("--output_path", default="output/", type=str, help="output directory to save training results")
     parser.add_argument(
         "--add_datetime", default=True, type=str, help="If True, add datetime subfolder under output_path"
     )
     # model
+    parser.add_argument(
+        "--model_version", default="v1", type=str, choices=["v1", "v1.1"], help="OpenSora model version."
+    )
     parser.add_argument(
         "--pretrained_model_path",
         default="",
@@ -47,7 +58,16 @@ def parse_train_args(parser):
     )
     parser.add_argument("--space_scale", default=0.5, type=float, help="stdit model space scalec")
     parser.add_argument("--time_scale", default=1.0, type=float, help="stdit model time scalec")
+    parser.add_argument("--model_max_length", type=int, default=120, help="T5's embedded sequence length.")
+    parser.add_argument(
+        "--patchify",
+        type=str,
+        default="conv2d",
+        choices=["conv3d", "conv2d", "linear"],
+        help="patchify_conv3d_replace, conv2d - equivalent conv2d to replace conv3d patchify, linear - equivalent linear layer to replace conv3d patchify  ",
+    )
     # ms
+    parser.add_argument("--debug", type=str2bool, default=False, help="Execute inference in debug mode.")
     parser.add_argument("--device_target", type=str, default="Ascend", help="Ascend or GPU")
     parser.add_argument("--max_device_memory", type=str, default=None, help="e.g. `30GB` for 910a, `59GB` for 910b")
     parser.add_argument("--mode", default=0, type=int, help="Specify the mode: 0 for graph mode, 1 for pynative mode")
@@ -87,10 +107,20 @@ def parse_train_args(parser):
     parser.add_argument("--seed", default=3407, type=int, help="data path")
     parser.add_argument("--warmup_steps", default=1000, type=int, help="warmup steps")
     parser.add_argument("--batch_size", default=10, type=int, help="batch size")
+    parser.add_argument(
+        "--vae_micro_batch_size",
+        type=int,
+        default=None,
+        help="If not None, split batch_size*num_frames into smaller ones for VAE encoding to reduce memory limitation",
+    )
     parser.add_argument("--start_learning_rate", default=1e-5, type=float, help="The initial learning rate for Adam.")
     parser.add_argument("--end_learning_rate", default=1e-7, type=float, help="The end learning rate for Adam.")
     parser.add_argument("--decay_steps", default=0, type=int, help="lr decay steps.")
     parser.add_argument("--scheduler", default="cosine_decay", type=str, help="scheduler.")
+    parser.add_argument("--pre_patchify", default=False, type=str2bool, help="Training with patchified latent.")
+    parser.add_argument(
+        "--max_image_size", default=512, type=int, help="Max image size for patchified latent training."
+    )
 
     # dataloader params
     parser.add_argument("--dataset_sink_mode", default=False, type=str2bool, help="sink mode")
@@ -118,18 +148,43 @@ def parse_train_args(parser):
         help="whether use recompute.",
     )
     parser.add_argument(
+        "--num_recompute_blocks",
+        default=None,
+        type=int,
+        help="If None, all stdit blocks will be applied with recompute (gradient checkpointing). If int, the first N blocks will be applied with recompute",
+    )
+    parser.add_argument(
         "--dtype",
         default="fp16",
         type=str,
         choices=["bf16", "fp16", "fp32"],
-        help="what data type to use for latte. Default is `fp16`, which corresponds to ms.float16",
+        help="what computation data type to use for latte. Default is `fp16`, which corresponds to ms.float16",
     )
     parser.add_argument(
         "--vae_dtype",
         default="fp32",
         type=str,
         choices=["bf16", "fp16", "fp32"],
-        help="what data type to use for latte. Default is `fp16`, which corresponds to ms.float16",
+        help="what compuatation data type to use for vae. Default is `fp32`, which corresponds to ms.float32",
+    )
+    parser.add_argument(
+        "--vae_keep_gn_fp32",
+        default=True,
+        type=str2bool,
+        help="whether keep GroupNorm in fp32.",
+    )
+    parser.add_argument(
+        "--global_bf16",
+        default=False,
+        type=str2bool,
+        help="Experimental. If True, dtype will be overrided, operators will be computered in bf16 if they are supported by CANN",
+    )
+    parser.add_argument(
+        "--vae_param_dtype",
+        default="fp32",
+        type=str,
+        choices=["bf16", "fp16", "fp32"],
+        help="what param data type to use for vae. Default is `fp32`, which corresponds to ms.float32",
     )
     parser.add_argument(
         "--amp_level",
@@ -138,6 +193,7 @@ def parse_train_args(parser):
         help="mindspore amp level, O1: most fp32, only layers in whitelist compute in fp16 (dense, conv, etc); \
             O2: most fp16, only layers in blacklist compute in fp32 (batch norm etc)",
     )
+    parser.add_argument("--vae_amp_level", default="O2", type=str, help="O2 or O3")
     parser.add_argument("--t5_model_dir", default=None, type=str, help="the T5 cache folder path")
     parser.add_argument(
         "--vae_checkpoint",
@@ -148,10 +204,18 @@ def parse_train_args(parser):
     parser.add_argument(
         "--sd_scale_factor", type=float, default=0.18215, help="VAE scale factor of Stable Diffusion model."
     )
-    parser.add_argument("--image_size", default=256, type=int, help="the image size used to initiate model")
+    parser.add_argument("--image_size", default=256, type=int, nargs="+", help="the image size used to initiate model")
     parser.add_argument("--num_frames", default=16, type=int, help="the num of frames used to initiate model")
     parser.add_argument("--frame_stride", default=3, type=int, help="frame sampling stride")
+    parser.add_argument("--mask_ratios", type=dict, help="Masking ratios")
+    parser.add_argument("--bucket_config", type=dict, help="Multi-resolution bucketing configuration")
     parser.add_argument("--num_parallel_workers", default=12, type=int, help="num workers for data loading")
+    parser.add_argument(
+        "--data_multiprocessing",
+        default=False,
+        type=str2bool,
+        help="If True, use multiprocessing for data processing. Default: multithreading.",
+    )
     parser.add_argument("--max_rowsize", default=64, type=int, help="max rowsize for data loading")
     parser.add_argument(
         "--disable_flip",
@@ -187,7 +251,6 @@ def parse_train_args(parser):
         type=str2bool,
         help="whether save ckpt by steps. If False, save ckpt by epochs.",
     )
-
     parser.add_argument("--profile", default=False, type=str2bool, help="Profile or not")
     parser.add_argument(
         "--log_level",
@@ -212,13 +275,21 @@ def parse_args():
     abs_path = os.path.abspath(os.path.join(__dir__, ".."))
     default_args = parser.parse_args()
     if default_args.config:
-        default_args.config = os.path.join(abs_path, default_args.config)
+        default_args.config = to_abspath(abs_path, default_args.config)
         with open(default_args.config, "r") as f:
             cfg = yaml.safe_load(f)
             _check_cfgs_in_parser(cfg, parser)
             parser.set_defaults(**cfg)
     args = parser.parse_args()
-
+    # convert to absolute path, necessary for modelarts
+    args.csv_path = to_abspath(abs_path, args.csv_path)
+    args.video_folder = to_abspath(abs_path, args.video_folder)
+    args.text_embed_folder = to_abspath(abs_path, args.text_embed_folder)
+    args.vae_latent_folder = to_abspath(abs_path, args.vae_latent_folder)
+    args.output_path = to_abspath(abs_path, args.output_path)
+    args.pretrained_model_path = to_abspath(abs_path, args.pretrained_model_path)
+    args.t5_model_dir = to_abspath(abs_path, args.t5_model_dir)
+    args.vae_checkpoint = to_abspath(abs_path, args.vae_checkpoint)
     print(args)
 
     return args

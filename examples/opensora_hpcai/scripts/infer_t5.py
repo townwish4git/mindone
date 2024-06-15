@@ -24,6 +24,7 @@ from opensora.utils.model_utils import str2bool  # _check_cfgs_in_parser
 
 from mindone.utils.amp import auto_mixed_precision
 from mindone.utils.logger import set_logger
+from mindone.utils.misc import to_abspath
 from mindone.utils.seed import set_random_seed
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,8 @@ def init_env(
         )
 
     if enable_dvm:
-        ms.set_context(enable_graph_kernel=True)
+        # FIXME: the graph_kernel_flags settting is a temp solution to fix dvm loss convergence in ms2.3-rc2. Refine it for future ms version.
+        ms.set_context(enable_graph_kernel=True, graph_kernel_flags="--disable_cluster_ops=Pow,Select")
 
     return rank_id, device_num
 
@@ -117,7 +119,7 @@ def main(args):
 
     # model initiate and weight loading
     ckpt_path = args.t5_model_dir
-    text_encoder, tokenizer = get_text_encoder_and_tokenizer("t5", ckpt_path)
+    text_encoder, tokenizer = get_text_encoder_and_tokenizer("t5", ckpt_path, model_max_length=args.model_max_length)
     text_encoder.set_train(False)
     for param in text_encoder.get_parameters():  # freeze latte_model
         param.requires_grad = False
@@ -163,7 +165,7 @@ def main(args):
                     text_emb=text_emb[i].asnumpy().astype(np.float32),
                     # tokens=text_tokens[i].asnumpy(), #.astype(np.int32),
                 )
-        logger.info(f"Curretn step time cost: {time_cost:0.3f}s")
+        logger.info(f"Current step time cost: {time_cost:0.3f}s")
         logger.info(f"Done. Embeddings saved in {output_dir}")
 
     else:
@@ -235,6 +237,7 @@ def parse_args():
     )
     parser.add_argument("--caption_column", type=str, default="caption", help="caption column num in csv")
     parser.add_argument("--t5_model_dir", default="models/t5-v1_1-xxl", type=str, help="the T5 cache folder path")
+    parser.add_argument("--model_max_length", type=int, default=120, help="T5's embedded sequence length.")
     # MS new args
     parser.add_argument("--device_target", type=str, default="Ascend", help="Ascend or GPU")
     parser.add_argument("--mode", type=int, default=0, help="Running in GRAPH_MODE(0) or PYNATIVE_MODE(1) (default=0)")
@@ -285,7 +288,7 @@ def parse_args():
     abs_path = os.path.abspath(os.path.join(__dir__, ".."))
     if default_args.config:
         logger.info(f"Overwrite default arguments with configuration file {default_args.config}")
-        default_args.config = os.path.join(abs_path, default_args.config)
+        default_args.config = to_abspath(abs_path, default_args.config)
         with open(default_args.config, "r") as f:
             cfg = yaml.safe_load(f)
             # _check_cfgs_in_parser(cfg, parser)
@@ -296,6 +299,11 @@ def parse_args():
                 )
             )
     args = parser.parse_args()
+    # convert to absolute path, necessary for modelarts
+    args.csv_path = to_abspath(abs_path, args.csv_path)
+    args.prompt_path = to_abspath(abs_path, args.prompt_path)
+    args.output_path = to_abspath(abs_path, args.output_path)
+    args.t5_model_dir = to_abspath(abs_path, args.t5_model_dir)
     return args
 
 

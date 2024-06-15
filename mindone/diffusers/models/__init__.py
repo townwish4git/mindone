@@ -17,19 +17,24 @@ from typing import TYPE_CHECKING
 from ..utils import _LazyModule
 
 _import_structure = {
+    "adapter": ["MultiAdapter", "T2IAdapter"],
     "autoencoders.autoencoder_kl": ["AutoencoderKL"],
+    "controlnet": ["ControlNetModel"],
     "embeddings": ["ImageProjection"],
     "modeling_utils": ["ModelMixin"],
     "transformers.transformer_2d": ["Transformer2DModel"],
+    "transformers.transformer_sd3": ["SD3Transformer2DModel"],
     "unets.unet_2d": ["UNet2DModel"],
     "unets.unet_2d_condition": ["UNet2DConditionModel"],
 }
 
 if TYPE_CHECKING:
+    from .adapter import MultiAdapter, T2IAdapter
     from .autoencoders import AutoencoderKL
+    from .controlnet import ControlNetModel
     from .embeddings import ImageProjection
     from .modeling_utils import ModelMixin
-    from .transformers import Transformer2DModel
+    from .transformers import SD3Transformer2DModel, Transformer2DModel
     from .unets import UNet2DConditionModel, UNet2DModel
 
 else:
