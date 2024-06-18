@@ -97,9 +97,36 @@ Most base, utility and mixin class are available.
 - [ ] StableDiffusionPipeline
 
 ### Model
+
+#### AutoEncoders
+
 - [x] AutoencoderKL
-- [x] Transformer2DModel
+- [x] AsymmetricAutoencoderKL
+- [x] AutoencoderKLTemporalDecoder
+- [x] ConsistencyDecoderVAE
+- [x] AutoEncoderTiny
+- [x] VQModel
+
+#### UNets
+
+- [ ] UNet1DModel
+- [x] UNet2DModel
 - [x] UNet2DConditionModel
+- [x] UNet3DConditionModel
+- [x] I2VGenXLUNet
+- [x] Kandinsky3UNet
+- [x] UNetSpatioTemporalConditionModel
+- [x] UNetMotionModel
+- [ ] StableCascadeUNet
+- [x] UViT2DModel
+
+#### Transformers
+
+- [x] Transformer2DModel
+- [x] TransformerTemporalModel
+- [x] T5FilmDecoder
+- [x] PriorTransformer
+- [x] DualTransformer2DModel
 
 ### Scheduler
 - [x] DDIMScheduler/DDPMScheduler/...(30)
@@ -122,6 +149,39 @@ Most base, utility and mixin class are available.
 
 Unlike the output `posterior = DiagonalGaussianDistribution(latent)`, which can do sampling by `posterior.sample()`.
 We can only output the `latent` and then do sampling through `AutoencoderKL.diag_gauss_dist.sample(latent)`.
+
+### `nn.Conv3d`
+
+3D convolution layer (`nn.Conv3d`) doesn't fully support `float32` precision on Ascend hardware. Models like `UNet3DConditionModel`, `I2VGenXLUNet`, `AutoencoderKLTemporalDecoder` and `UNetSpatioTemporalConditionModel`, and other modules using this layer, therefore, don't work with `float32` on Ascend. Users should consider using lower precision for these cases.
+
+<details>
+  <summary>Full List of Affected Modules</summary>
+
+  - Models
+    - UNet3DConditionModel
+    - I2VGenXLUNet
+    - AutoencoderKLTemporalDecoder
+    - UNetSpatioTemporalConditionModel
+  - Layers & Modules
+    - TemporalConvLayer
+    - TemporalResnetBlock
+    - SpatioTemporalResBlock
+    - UNetMidBlock3DCrossAttn
+    - CrossAttnDownBlock3D
+    - DownBlock3D
+    - CrossAttnUpBlock3D
+    - UpBlock3D
+    - MidBlockTemporalDecoder
+    - UpBlockTemporalDecoder
+    - UNetMidBlockSpatioTemporal
+    - DownBlockSpatioTemporal
+    - CrossAttnDownBlockSpatioTemporal
+    - UpBlockSpatioTemporal
+    - CrossAttnUpBlockSpatioTemporal
+
+  Please note, this list comprehensively includes all modules impacted by the limited support for float32 precision in nn.Conv3d within MindSpore on certain hardware environments.
+
+</details>
 
 ## Credits
 
