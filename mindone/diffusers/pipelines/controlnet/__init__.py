@@ -17,8 +17,7 @@ _import_structure["pipeline_controlnet_sd_xl_img2img"] = ["StableDiffusionXLCont
 if TYPE_CHECKING:
     from .multicontrolnet import MultiControlNetModel
     from .pipeline_controlnet import StableDiffusionControlNetPipeline
-
-    # from .pipeline_controlnet_blip_diffusion import BlipDiffusionControlNetPipeline
+    from .pipeline_controlnet_blip_diffusion import BlipDiffusionControlNetPipeline
     from .pipeline_controlnet_img2img import StableDiffusionControlNetImg2ImgPipeline
     from .pipeline_controlnet_inpaint import StableDiffusionControlNetInpaintPipeline
     from .pipeline_controlnet_inpaint_sd_xl import StableDiffusionXLControlNetInpaintPipeline
