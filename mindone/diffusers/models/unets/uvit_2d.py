@@ -18,6 +18,7 @@ from typing import Dict, Union
 from mindspore import nn, ops
 
 from ...configuration_utils import ConfigMixin, register_to_config
+from ...loaders import PeftAdapterMixin
 from ..attention import BasicTransformerBlock, SkipFFTransformerBlock
 from ..attention_processor import CROSS_ATTENTION_PROCESSORS, AttentionProcessor, AttnProcessor
 from ..embeddings import TimestepEmbedding, get_timestep_embedding
@@ -26,7 +27,7 @@ from ..normalization import GlobalResponseNorm, RMSNorm
 from ..resnet import Downsample2D, Upsample2D
 
 
-class UVit2DModel(ModelMixin, ConfigMixin):
+class UVit2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin):
     _supports_gradient_checkpointing = True
 
     @register_to_config

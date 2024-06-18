@@ -5,6 +5,7 @@ import mindspore as ms
 from mindspore import nn, ops
 
 from ...configuration_utils import ConfigMixin, register_to_config
+from ...loaders import UNet2DConditionLoadersMixin
 from ...utils import BaseOutput, logging
 from ..activations import SiLU
 from ..attention_processor import CROSS_ATTENTION_PROCESSORS, AttentionProcessor, AttnProcessor
@@ -29,7 +30,7 @@ class UNetSpatioTemporalConditionOutput(BaseOutput):
     sample: ms.Tensor = None
 
 
-class UNetSpatioTemporalConditionModel(ModelMixin, ConfigMixin):
+class UNetSpatioTemporalConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
     r"""
     A conditional Spatio-Temporal UNet model that takes a noisy video frames, conditional state, and a timestep and returns a sample
     shaped output.

@@ -20,6 +20,7 @@ import mindspore as ms
 from mindspore import nn, ops
 
 from ...configuration_utils import ConfigMixin, register_to_config
+from ...loaders import UNet2DConditionLoadersMixin
 from ...utils import BaseOutput, logging
 from ..activations import get_activation
 from ..attention_processor import CROSS_ATTENTION_PROCESSORS, AttentionProcessor, AttnProcessor
@@ -53,7 +54,7 @@ class UNet3DConditionOutput(BaseOutput):
     sample: ms.Tensor
 
 
-class UNet3DConditionModel(ModelMixin, ConfigMixin):
+class UNet3DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
     r"""
     A conditional 3D UNet model that takes a noisy sample, conditional state, and a timestep and returns a sample
     shaped output.

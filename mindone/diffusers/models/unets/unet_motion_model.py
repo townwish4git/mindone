@@ -17,6 +17,7 @@ import mindspore as ms
 from mindspore import nn, ops
 
 from ...configuration_utils import ConfigMixin, register_to_config
+from ...loaders import UNet2DConditionLoadersMixin
 from ...utils import logging
 from ..activations import SiLU
 from ..attention_processor import CROSS_ATTENTION_PROCESSORS, AttentionProcessor, AttnProcessor
@@ -169,7 +170,7 @@ class MotionAdapter(ModelMixin, ConfigMixin):
         pass
 
 
-class UNetMotionModel(ModelMixin, ConfigMixin):
+class UNetMotionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
     r"""
     A modified conditional 2D UNet model that takes a noisy sample, conditional state, and a timestep and returns a
     sample shaped output.
