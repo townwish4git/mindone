@@ -13,13 +13,20 @@
 # limitations under the License.
 from typing import Callable, Optional, Union
 
+from packaging import version
+
 import mindspore as ms
 from mindspore import nn, ops
+from mindspore.ops.operations.nn_ops import FlashAttentionScore
 
 from ..image_processor import IPAdapterMaskProcessor
 from ..utils import logging
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
+
+mindspore_version = version.parse(ms.__version__)
+fa_interface_changing_version = version.parse("2.2.11")
 
 
 class Attention(nn.Cell):
@@ -203,6 +210,34 @@ class Attention(nn.Cell):
             processor = AttnProcessor()
         self.processor = processor
 
+        # fa interface wrapper
+        self.flash_attn_op = FlashAttentionScore(1, self.scale)
+        if mindspore_version < fa_interface_changing_version:
+            self.flash_attn = self._flash_attn_2_2_10_minus
+        else:
+            self.flash_attn = self._flash_attn_2_2_11_plus
+
+    def _flash_attn_2_2_10_minus(self, q, k, v, mask):
+        if q.shape[-2] % 16 == 0 and k.shape[-2] % 16 == 0 and q.shape[-1] <= 256:
+            if mask is None:
+                mask = ops.zeros((q.shape[0], q.shape[-2], k.shape[-2]), dtype=ms.uint8)
+            drop_mask = ops.zeros((q.shape[0], q.shape[-2], k.shape[-2]), dtype=ms.uint8)
+            hidden_states = self.flash_attn_op(q, k, v, mask, drop_mask, None, None, None)[0]
+        else:
+            attention_probs = self.get_attention_scores(q, k, mask)
+            hidden_states = ops.bmm(attention_probs, v)
+            hidden_states = self.batch_to_head_dim(hidden_states)
+        return hidden_states
+
+    def _flash_attn_2_2_11_plus(self, q, k, v, mask):
+        if q.shape[-2] % 16 == 0 and k.shape[-2] % 16 == 0 and q.shape[-1] <= 256:
+            hidden_states = self.flash_attn_op(q, k, v, None, None, None, mask)[3]
+        else:
+            attention_probs = self.get_attention_scores(q, k, mask)
+            hidden_states = ops.bmm(attention_probs, v)
+            hidden_states = self.batch_to_head_dim(hidden_states)
+        return hidden_states
+
     def set_use_memory_efficient_attention_xformers(
         self, use_memory_efficient_attention_xformers: bool, attention_op: Optional[Callable] = None
     ) -> None:
@@ -231,11 +266,11 @@ class Attention(nn.Cell):
             else:
                 try:
                     # Make sure we can run the memory efficient attention
-                    flash_attn = ops.operations.nn_ops.FlashAttentionScore(1, input_layout="BSH")
-                    _ = flash_attn(
+                    _ = self.flash_attn(
                         ops.randn(1, 16, 64, dtype=ms.float16),
                         ops.randn(1, 16, 64, dtype=ms.float16),
                         ops.randn(1, 16, 64, dtype=ms.float16),
+                        None,
                     )
                 except Exception as e:
                     raise e
@@ -1008,7 +1043,7 @@ class XFormersAttnProcessor:
         # 3. The input dtype must be float16 or bfloat16.
         # Sequence length of query must be checked in runtime.
         _, query_tokens, _ = query.shape
-        assert query_tokens % 16 == 0, f"Sequence length of query must be divisible by 16, but got {query_tokens=}."
+        # assert query_tokens % 16 == 0, f"Sequence length of query must be divisible by 16, but got {query_tokens=}."
         # Head dimension is checked in Attention.set_use_memory_efficient_attention_xformers. We maybe pad on head_dim.
         if attn.head_dim_padding > 0:
             query_padded = ops.pad(query, (0, attn.head_dim_padding), mode="constant", value=0.0)
@@ -1016,8 +1051,9 @@ class XFormersAttnProcessor:
             value_padded = ops.pad(value, (0, attn.head_dim_padding), mode="constant", value=0.0)
         else:
             query_padded, key_padded, value_padded = query, key, value
-        flash_attn = ops.operations.nn_ops.FlashAttentionScore(1, scale_value=attn.scale)
-        hidden_states_padded = flash_attn(query_padded, key_padded, value_padded, None, None, None, attention_mask)[3]
+        # flash_attn = ops.operations.nn_ops.FlashAttentionScore(1, scale_value=attn.scale)
+        # hidden_states_padded = flash_attn(query_padded, key_padded, value_padded, None, None, None, attention_mask)[3]
+        hidden_states_padded = attn.flash_attn(query_padded, key_padded, value_padded, attention_mask)
         # If we did padding before calculate attention, undo it!
         if attn.head_dim_padding > 0:
             hidden_states = hidden_states_padded[..., : attn.head_dim]
