@@ -38,6 +38,7 @@ class DecoderOutput(BaseOutput):
     """
 
     sample: ms.Tensor
+    commit_loss: Optional[ms.Tensor] = None
 
 
 class Encoder(nn.Cell):
@@ -443,7 +444,6 @@ class MaskConditionDecoder(nn.Cell):
             has_bias=True,
         )
 
-        self.mid_block = None
         self.up_blocks = []
 
         temb_channels = in_channels if norm_type == "spatial" else None
@@ -830,6 +830,7 @@ class DecoderTiny(nn.Cell):
         block_out_channels: Tuple[int, ...],
         upsampling_scaling_factor: int,
         act_fn: str,
+        upsample_fn: str,
     ):
         super().__init__()
 
@@ -846,7 +847,7 @@ class DecoderTiny(nn.Cell):
                 layers.append(AutoencoderTinyBlock(num_channels, num_channels, act_fn))
 
             if not is_final_block:
-                layers.append(DecoderTinyUpsample(scale_factor=upsampling_scaling_factor))
+                layers.append(DecoderTinyUpsample(scale_factor=upsampling_scaling_factor, mode=upsample_fn))
 
             conv_out_channel = num_channels if not is_final_block else out_channels
             layers.append(
