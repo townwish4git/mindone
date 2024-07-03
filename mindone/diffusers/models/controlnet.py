@@ -824,7 +824,8 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlNetMixin):
 
 
 def zero_module(module: nn.Cell):
-    raise RuntimeWarning(
-        "Method 'zero_module' does nothing because changing parameter data after initiating will "
-        "make parameter.set_dtype() invalid. Use arguments like 'weight_init' in instantiation instead"
+    logger.warning(
+        "Method 'zero_module' does nothing because changing parameter data after initiating will make "
+        "parameter.set_dtype() invalid sometimes. Use arguments like 'weight_init' in instantiation instead"
     )
+    return module
