@@ -212,10 +212,16 @@ class SD3ControlNetModel(ModelMixin, ConfigMixin, PeftAdapterMixin):
         controlnet = cls(**config)
 
         if load_weights_from_transformer:
-            ms.load_param_into_net(controlnet.pos_embed, transformer.pos_embed.parameters_dict())
-            ms.load_param_into_net(controlnet.time_text_embed, transformer.time_text_embed.parameters_dict())
-            ms.load_param_into_net(controlnet.context_embedder, transformer.context_embedder.parameters_dict())
-            ms.load_param_into_net(controlnet.transformer_blocks, transformer.transformer_blocks.parameters_dict())
+            ms.load_param_into_net(controlnet.pos_embed, transformer.pos_embed.parameters_dict(), strict_load=True)
+            ms.load_param_into_net(
+                controlnet.time_text_embed, transformer.time_text_embed.parameters_dict(), strict_load=True
+            )
+            ms.load_param_into_net(
+                controlnet.context_embedder, transformer.context_embedder.parameters_dict(), strict_load=True
+            )
+            ms.load_param_into_net(
+                controlnet.transformer_blocks, transformer.transformer_blocks.parameters_dict(), strict_load=True
+            )
 
             # No `zero_module` here for it is done in cls.__init__
             # controlnet.pos_embed_input = zero_module(controlnet.pos_embed_input)

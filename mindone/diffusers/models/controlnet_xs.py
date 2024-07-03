@@ -789,7 +789,9 @@ class UNetControlNetXSModel(ModelMixin, ConfigMixin):
             "conv_out",
         ]
         for m in modules_from_unet:
-            ms.load_param_into_net(getattr(model, "base_" + m), get_state_dict(getattr(unet, m), "base_" + m))
+            ms.load_param_into_net(
+                getattr(model, "base_" + m), get_state_dict(getattr(unet, m), "base_" + m), strict_load=True
+            )
 
         optional_modules_from_unet = [
             "add_time_proj",
@@ -797,19 +799,27 @@ class UNetControlNetXSModel(ModelMixin, ConfigMixin):
         ]
         for m in optional_modules_from_unet:
             if hasattr(unet, m) and getattr(unet, m) is not None:
-                ms.load_param_into_net(getattr(model, "base_" + m), get_state_dict(getattr(unet, m), "base_" + m))
+                ms.load_param_into_net(
+                    getattr(model, "base_" + m), get_state_dict(getattr(unet, m), "base_" + m), strict_load=True
+                )
 
         # from controlnet
-        ms.load_param_into_net(model.controlnet_cond_embedding, controlnet.controlnet_cond_embedding.parameters_dict())
-        # ms.load_param_into_net(model.ctrl_conv_in, controlnet.conv_in.parameters_dict())
-        ms.load_param_into_net(model.ctrl_conv_in, get_state_dict(controlnet.conv_in, "ctrl_conv_in"))
+        ms.load_param_into_net(
+            model.controlnet_cond_embedding,
+            get_state_dict(controlnet.controlnet_cond_embedding, "controlnet_cond_embedding"),
+            strict_load=True,
+        )
+        ms.load_param_into_net(model.ctrl_conv_in, get_state_dict(controlnet.conv_in, "ctrl_conv_in"), strict_load=True)
         if controlnet.time_embedding is not None:
-            # ms.load_param_into_net(model.ctrl_time_embedding, controlnet.time_embedding.parameters_dict())
             ms.load_param_into_net(
-                model.ctrl_time_embedding, get_state_dict(controlnet.time_embedding, "ctrl_time_embedding")
+                model.ctrl_time_embedding,
+                get_state_dict(controlnet.time_embedding, "ctrl_time_embedding"),
+                strict_load=True,
             )
         ms.load_param_into_net(
-            model.control_to_base_for_conv_in, controlnet.control_to_base_for_conv_in.parameters_dict()
+            model.control_to_base_for_conv_in,
+            get_state_dict(controlnet.control_to_base_for_conv_in, "control_to_base_for_conv_in"),
+            strict_load=True,
         )
 
         # from both
@@ -1309,20 +1319,36 @@ class ControlNetXSCrossAttnDownBlock2D(nn.Cell):
         sync_dtype(model, base_downblock)
 
         # load weights
-        ms.load_param_into_net(model.base_resnets, get_state_dict(base_downblock.resnets, "base_resnets"))
-        ms.load_param_into_net(model.ctrl_resnets, get_state_dict(ctrl_downblock.resnets, "ctrl_resnets"))
+        ms.load_param_into_net(
+            model.base_resnets, get_state_dict(base_downblock.resnets, "base_resnets"), strict_load=True
+        )
+        ms.load_param_into_net(
+            model.ctrl_resnets, get_state_dict(ctrl_downblock.resnets, "ctrl_resnets"), strict_load=True
+        )
         if has_crossattn:
-            ms.load_param_into_net(model.base_attentions, get_state_dict(base_downblock.attentions, "base_attentions"))
-            ms.load_param_into_net(model.ctrl_attentions, get_state_dict(ctrl_downblock.attentions, "ctrl_attentions"))
+            ms.load_param_into_net(
+                model.base_attentions, get_state_dict(base_downblock.attentions, "base_attentions"), strict_load=True
+            )
+            ms.load_param_into_net(
+                model.ctrl_attentions, get_state_dict(ctrl_downblock.attentions, "ctrl_attentions"), strict_load=True
+            )
         if add_downsample:
             ms.load_param_into_net(
-                model.base_downsamplers, get_state_dict(base_downblock.downsamplers[0], "base_downsamplers")
+                model.base_downsamplers,
+                get_state_dict(base_downblock.downsamplers[0], "base_downsamplers"),
+                strict_load=True,
             )
             ms.load_param_into_net(
-                model.ctrl_downsamplers, get_state_dict(ctrl_downblock.downsamplers, "ctrl_downsamplers")
+                model.ctrl_downsamplers,
+                get_state_dict(ctrl_downblock.downsamplers, "ctrl_downsamplers"),
+                strict_load=True,
             )
-        ms.load_param_into_net(model.base_to_ctrl, get_state_dict(ctrl_downblock.base_to_ctrl, "base_to_ctrl"))
-        ms.load_param_into_net(model.ctrl_to_base, get_state_dict(ctrl_downblock.ctrl_to_base, "ctrl_to_base"))
+        ms.load_param_into_net(
+            model.base_to_ctrl, get_state_dict(ctrl_downblock.base_to_ctrl, "base_to_ctrl"), strict_load=True
+        )
+        ms.load_param_into_net(
+            model.ctrl_to_base, get_state_dict(ctrl_downblock.ctrl_to_base, "ctrl_to_base"), strict_load=True
+        )
 
         return model
 
@@ -1528,10 +1554,10 @@ class ControlNetXSCrossAttnMidBlock2D(nn.Cell):
         sync_dtype(model, base_midblock)
 
         # load weights
-        ms.load_param_into_net(model.base_to_ctrl, get_state_dict(base_to_ctrl, "base_to_ctrl"))
-        ms.load_param_into_net(model.base_midblock, get_state_dict(base_midblock, "base_midblock"))
-        ms.load_param_into_net(model.ctrl_midblock, get_state_dict(ctrl_midblock, "ctrl_midblock"))
-        ms.load_param_into_net(model.ctrl_to_base, get_state_dict(ctrl_to_base, "ctrl_to_base"))
+        ms.load_param_into_net(model.base_to_ctrl, get_state_dict(base_to_ctrl, "base_to_ctrl"), strict_load=True)
+        ms.load_param_into_net(model.base_midblock, get_state_dict(base_midblock, "base_midblock"), strict_load=True)
+        ms.load_param_into_net(model.ctrl_midblock, get_state_dict(ctrl_midblock, "ctrl_midblock"), strict_load=True)
+        ms.load_param_into_net(model.ctrl_to_base, get_state_dict(ctrl_to_base, "ctrl_to_base"), strict_load=True)
 
         return model
 
@@ -1708,12 +1734,18 @@ class ControlNetXSCrossAttnUpBlock2D(nn.Cell):
         sync_dtype(model, base_upblock)
 
         # load weights
-        ms.load_param_into_net(model.resnets, get_state_dict(base_upblock.resnets, "resnets"))
+        ms.load_param_into_net(model.resnets, get_state_dict(base_upblock.resnets, "resnets"), strict_load=True)
         if has_crossattn:
-            ms.load_param_into_net(model.attentions, get_state_dict(base_upblock.attentions, "attentions"))
+            ms.load_param_into_net(
+                model.attentions, get_state_dict(base_upblock.attentions, "attentions"), strict_load=True
+            )
         if add_upsample:
-            ms.load_param_into_net(model.upsamplers, get_state_dict(base_upblock.upsamplers[0], "upsamplers"))
-        ms.load_param_into_net(model.ctrl_to_base, get_state_dict(ctrl_to_base_skip_connections, "ctrl_to_base"))
+            ms.load_param_into_net(
+                model.upsamplers, get_state_dict(base_upblock.upsamplers[0], "upsamplers"), strict_load=True
+            )
+        ms.load_param_into_net(
+            model.ctrl_to_base, get_state_dict(ctrl_to_base_skip_connections, "ctrl_to_base"), strict_load=True
+        )
 
         return model
 
