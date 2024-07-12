@@ -23,12 +23,11 @@ from mindspore import ops
 
 from ....transformers import CLIPTextModelWithProjection, T5EncoderModel
 from ...image_processor import VaeImageProcessor
-
-# from ...loaders import SD3LoraLoaderMixin
+from ...loaders import SD3LoraLoaderMixin
 from ...models.autoencoders import AutoencoderKL
 from ...models.transformers import SD3Transformer2DModel
 from ...schedulers import FlowMatchEulerDiscreteScheduler
-from ...utils import logging
+from ...utils import logging, scale_lora_layers, unscale_lora_layers
 from ...utils.mindspore_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import StableDiffusion3PipelineOutput
@@ -94,7 +93,7 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-class StableDiffusion3Pipeline(DiffusionPipeline):
+class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin):
     r"""
     Args:
         transformer ([`SD3Transformer2DModel`]):
@@ -765,6 +764,13 @@ class StableDiffusion3Pipeline(DiffusionPipeline):
             latents,
         )
 
+        # we're popping the `scale` instead of getting it because otherwise `scale` will be propagated
+        # to the transformer and will raise RuntimeError.
+        lora_scale = self.joint_attention_kwargs.pop("scale", None) if self.joint_attention_kwargs is not None else None
+        if lora_scale is not None:
+            # weight the lora layers by setting `lora_scale` for each PEFT layer
+            scale_lora_layers(self.transformer, lora_scale)
+
         # 6. Denoising loop
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
@@ -814,11 +820,18 @@ class StableDiffusion3Pipeline(DiffusionPipeline):
                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
 
+        if lora_scale is not None:
+            # remove `lora_scale` from each PEFT layer
+            unscale_lora_layers(self.transformer, lora_scale)
+
         if output_type == "latent":
             image = latents
 
         else:
             latents = (latents / self.vae.config.scaling_factor) + self.vae.config.shift_factor
+            latents = latents.to(
+                self.vae.dtype
+            )  # for validation in training where vae and transformer might have different dtype
 
             image = self.vae.decode(latents, return_dict=False)[0]
             image = self.image_processor.postprocess(image, output_type=output_type)
