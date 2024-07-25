@@ -317,16 +317,32 @@ def init_distributed_device(args):
     args.rank = 0  # global rank
     args.local_rank = 0
     if args.distributed:
-        init()
-        args.local_rank = get_local_rank()
-        args.world_size = get_group_size()
-        args.rank = get_rank()
-        ms.context.set_auto_parallel_context(
-            device_num=args.world_size,
-            global_rank=args.rank,
-            parallel_mode="data_parallel",
-            gradients_mean=True,
-        )
+        distributed_mode = getattr(args, "distributed_mode", "data")
+        if distributed_mode == "data":
+            init()
+            args.local_rank = get_local_rank()
+            args.world_size = get_group_size()
+            args.rank = get_rank()
+            context.set_auto_parallel_context(
+                device_num=args.world_size,
+                global_rank=args.rank,
+                parallel_mode="data_parallel",
+                gradients_mean=True,
+            )
+        elif distributed_mode == "optimizer":
+            context.set_auto_parallel_context(
+                parallel_mode=context.ParallelMode.SEMI_AUTO_PARALLEL,
+                enable_parallel_optimizer=True,
+                gradients_mean=True,
+            )
+            init()
+            args.local_rank = get_local_rank()
+            args.world_size = get_group_size()
+            args.rank = get_rank()
+        else:
+            raise ValueError(
+                f"The parameter 'distributed_mode' currently only supports ['data', 'optimizer'], but received value '{distributed_mode}'"
+            )
 
     device = f"{ms.get_context('device_target')}:{ms.get_context('device_id')}"
     args.device = device
@@ -453,7 +469,7 @@ class GradAccumulator:
 
     def __init__(self, params: ms.ParameterTuple, gradient_accumulation_steps: Optional[int], **kwargs):
         parallel_mode = context.get_auto_parallel_context("parallel_mode")
-        if parallel_mode == context.ParallelMode.STAND_ALONE:
+        if parallel_mode in (context.ParallelMode.STAND_ALONE, context.ParallelMode.SEMI_AUTO_PARALLEL):
             self.grad_reducer = nn.Identity()
         elif parallel_mode in (context.ParallelMode.DATA_PARALLEL, context.ParallelMode.HYBRID_PARALLEL):
             self.grad_reducer = nn.DistributedGradReducer(params)
