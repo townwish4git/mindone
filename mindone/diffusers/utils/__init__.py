@@ -43,7 +43,9 @@ from .import_utils import (
     _LazyModule,
     is_bs4_available,
     is_ftfy_available,
+    is_matplotlib_available,
     is_opencv_available,
+    is_scipy_available,
     maybe_import_module_in_mindone,
 )
 from .loading_utils import load_image
