@@ -13,6 +13,8 @@
 # limitations under the License.
 from typing import Dict, Optional, Tuple, Union
 
+import numpy as np
+
 import mindspore as ms
 from mindspore import nn
 
@@ -240,7 +242,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
 
         return DecoderOutput(sample=dec)
 
-    def decode(self, z: ms.Tensor, return_dict: bool = False) -> Union[DecoderOutput, Tuple[ms.Tensor]]:
+    def decode(self, z: ms.Tensor, return_dict: bool = False, generator=None) -> Union[DecoderOutput, Tuple[ms.Tensor]]:
         """
         Decode a batch of images.
 
@@ -267,6 +269,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         sample: ms.Tensor,
         sample_posterior: bool = False,
         return_dict: bool = False,
+        generator: Optional[np.random.Generator] = None,
     ) -> Union[DecoderOutput, Tuple[ms.Tensor]]:
         r"""
         Args:
@@ -279,7 +282,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         x = sample
         latent = self.encode(x)[0]
         if sample_posterior:
-            z = self.diag_gauss_dist.sample(latent)
+            z = self.diag_gauss_dist.sample(latent, generator=generator)
         else:
             z = self.diag_gauss_dist.mode(latent)
         dec = self.decode(z)[0]

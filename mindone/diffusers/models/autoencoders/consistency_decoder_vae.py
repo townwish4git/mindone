@@ -253,7 +253,11 @@ class ConsistencyDecoderVAE(ModelMixin, ConfigMixin):
 
         batch_size, _, height, width = z.shape
 
-        # self.decoder_scheduler.set_timesteps(num_inference_steps)
+        # We commented this statement `self.decoder_scheduler.set_timesteps(num_inference_steps)` based on two facts:
+        # 1. GRAPH MODE doesn't support changing mindspore tensor `self.decoder_scheduler.timesteps` in construct();
+        # 2. As of now `num_inference_steps` of `ConsistencyDecoderScheduler.set_timesteps` is always 2.
+        # Thus we move this statement to ConsistencyDecoderScheduler.__init__(). If there are any scenarios in future versions
+        # that fall outside the current scope of application, please feel free to contact townwish4git or Cui-yshoho to modify this part
 
         x_t = self.decoder_scheduler.init_noise_sigma * randn_tensor(
             (batch_size, 3, height, width),
@@ -298,7 +302,7 @@ class ConsistencyDecoderVAE(ModelMixin, ConfigMixin):
         x = sample
         latent = self.encode(x)[0]
         if sample_posterior:
-            z = self.diag_gauss_dist.sample(latent)
+            z = self.diag_gauss_dist.sample(latent, generator=generator)
         else:
             z = self.diag_gauss_dist.mode(latent)
         dec = self.decode(z, generator=generator)[0]
