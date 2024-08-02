@@ -86,6 +86,37 @@ class AdaLayerNormZero(nn.Cell):
         return x, gate_msa, shift_mlp, scale_mlp, gate_mlp
 
 
+class AdaLayerNormZeroSingle(nn.Cell):
+    r"""
+    Norm layer adaptive layer norm zero (adaLN-Zero).
+    Parameters:
+        embedding_dim (`int`): The size of each embedding vector.
+        num_embeddings (`int`): The size of the embeddings dictionary.
+    """
+
+    def __init__(self, embedding_dim: int, norm_type="layer_norm", bias=True):
+        super().__init__()
+
+        self.silu = nn.SiLU()
+        self.linear = nn.Dense(embedding_dim, 3 * embedding_dim, bias=bias)
+        if norm_type == "layer_norm":
+            self.norm = LayerNorm(embedding_dim, elementwise_affine=False, eps=1e-6)
+        else:
+            raise ValueError(
+                f"Unsupported `norm_type` ({norm_type}) provided. Supported ones are: 'layer_norm', 'fp32_layer_norm'."
+            )
+
+    def construct(
+        self,
+        x: ms.Tensor,
+        emb: Optional[ms.Tensor] = None,
+    ) -> Tuple[ms.Tensor, ms.Tensor, ms.Tensor, ms.Tensor, ms.Tensor]:
+        emb = self.linear(self.silu(emb))
+        shift_msa, scale_msa, gate_msa = emb.chunk(3, axis=1)
+        x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
+        return x, gate_msa
+
+
 class AdaLayerNormSingle(nn.Cell):
     r"""
     Norm layer adaptive layer norm single (adaLN-single).
@@ -291,6 +322,11 @@ class LayerNorm(nn.Cell):
     def construct(self, x: Tensor):
         x, _, _ = self.layer_norm(x, self.weight, self.bias)
         return x
+
+
+class FP32LayerNorm(LayerNorm):
+    def construct(self, x: Tensor):
+        return super().construct(x.float()).to(x.dtype)
 
 
 class GroupNorm(nn.Cell):
