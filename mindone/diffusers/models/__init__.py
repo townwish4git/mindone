@@ -37,6 +37,7 @@ _import_structure = {
     "transformers.prior_transformer": ["PriorTransformer"],
     "transformers.t5_film_transformer": ["T5FilmDecoder"],
     "transformers.transformer_2d": ["Transformer2DModel"],
+    "transformers.transformer_flux": ["FluxTransformer2DModel"],
     "transformers.transformer_sd3": ["SD3Transformer2DModel"],
     "transformers.transformer_temporal": ["TransformerTemporalModel"],
     "unets.unet_1d": ["UNet1DModel"],
@@ -69,6 +70,7 @@ if TYPE_CHECKING:
     from .transformers import (
         DiTTransformer2DModel,
         DualTransformer2DModel,
+        FluxTransformer2DModel,
         HunyuanDiT2DModel,
         PixArtTransformer2DModel,
         PriorTransformer,

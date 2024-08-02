@@ -58,6 +58,14 @@ except importlib_metadata.PackageNotFoundError:
     _opencv_available = False
 
 
+_scipy_available = importlib.util.find_spec("scipy") is not None
+try:
+    _scipy_version = importlib_metadata.version("scipy")
+    logger.debug(f"Successfully imported scipy version {_scipy_version}")
+except importlib_metadata.PackageNotFoundError:
+    _scipy_available = False
+
+
 _ftfy_available = importlib.util.find_spec("ftfy") is not None
 try:
     _ftfy_version = importlib_metadata.version("ftfy")
@@ -75,8 +83,20 @@ except importlib_metadata.PackageNotFoundError:
     _bs4_available = False
 
 
+_matplotlib_available = importlib.util.find_spec("matplotlib") is not None
+try:
+    _matplotlib_version = importlib_metadata.version("matplotlib")
+    logger.debug(f"Successfully imported matplotlib version {_matplotlib_version}")
+except importlib_metadata.PackageNotFoundError:
+    _matplotlib_available = False
+
+
 def is_opencv_available():
     return _opencv_available
+
+
+def is_scipy_available():
+    return _scipy_available
 
 
 def is_ftfy_available():
@@ -87,11 +107,23 @@ def is_bs4_available():
     return _bs4_available
 
 
+def is_matplotlib_available():
+    return _matplotlib_available
+
+
 # docstyle-ignore
 OPENCV_IMPORT_ERROR = """
 {0} requires the OpenCV library but it was not found in your environment. You can install it with pip: `pip
 install opencv-python`
 """
+
+
+# docstyle-ignore
+SCIPY_IMPORT_ERROR = """
+{0} requires the scipy library but it was not found in your environment. You can install it with pip: `pip install
+scipy`
+"""
+
 
 # docstyle-ignore
 BS4_IMPORT_ERROR = """

@@ -55,6 +55,7 @@ _import_structure = {
     ],
     "stable_diffusion_3": [
         "StableDiffusion3Pipeline",
+        "StableDiffusion3Img2ImgPipeline",
     ],
     "stable_diffusion_xl": [
         "StableDiffusionXLInpaintPipeline",
@@ -114,7 +115,7 @@ if TYPE_CHECKING:
         StableDiffusionPipeline,
         StableDiffusionUpscalePipeline,
     )
-    from .stable_diffusion_3 import StableDiffusion3Pipeline
+    from .stable_diffusion_3 import StableDiffusion3Img2ImgPipeline, StableDiffusion3Pipeline
     from .stable_diffusion_xl import (
         StableDiffusionXLImg2ImgPipeline,
         StableDiffusionXLInpaintPipeline,
