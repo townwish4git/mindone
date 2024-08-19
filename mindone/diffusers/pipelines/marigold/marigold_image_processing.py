@@ -83,7 +83,8 @@ class MarigoldImageProcessor(ConfigMixin):
             raise ValueError(f"Invalid input dimensions; shape={image.shape}.")
 
         antialias = is_aa and mode in ("bilinear", "bicubic")
-        image = ops.interpolate(image, size, mode=mode, antialias=antialias)
+        # abandone argument `antialias=antialias` as MindSpore doesn't support
+        image = ops.interpolate(image, size, mode=mode)
 
         return image
 

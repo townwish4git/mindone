@@ -42,7 +42,7 @@ def _fetch_remapped_cls_from_config(config, old_class):
     # https://github.com/huggingface/diffusers/pull/7647#discussion_r1621344818
     if remapped_class_name:
         # load diffusers library to import compatible and original scheduler
-        diffusers_library = importlib.import_module(__name__.split(".")[0])
+        diffusers_library = importlib.import_module(__name__.split(".")[0] + ".diffusers")
         remapped_class = getattr(diffusers_library, remapped_class_name)
         logger.info(
             f"Changing class object to be of `{remapped_class_name}` type from `{previous_class_name}` type."

@@ -1001,10 +1001,9 @@ class StableDiffusionXLControlNetXSPipeline(
                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
 
-        # manually for max memory savings
-        if self.vae.dtype == ms.float16 and self.vae.config.force_upcast:
-            self.upcast_vae()
-            latents = latents.to(next(iter(self.vae.post_quant_conv.get_parameters())).dtype)
+        # Do not cast manually here for max memory savings like original diffusers as it will be done in
+        # `if not output_type == "latent"` branch, and original casting outside has not corresponding
+        # 'cast back to fp16 if needed' which might raise error if pipeline is called repeatedly.
 
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16

@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import math
 from typing import Callable, List, Optional, Union
 
 import mindspore as ms
@@ -123,6 +124,7 @@ class Attention(nn.Cell):
 
         self.scale_qk = scale_qk
         self.scale = dim_head**-0.5 if self.scale_qk else 1.0
+        self.scale_sqrt = float(math.sqrt(self.scale))
 
         self.heads = out_dim // dim_head if out_dim is not None else heads
         # for slice_size > 0 the attention score computation
@@ -431,17 +433,17 @@ class Attention(nn.Cell):
             key = key.float()
 
         if attention_mask is None:
-            attention_scores = self.scale * ops.bmm(
-                query,
-                key.swapaxes(-1, -2),
+            attention_scores = ops.bmm(
+                query * self.scale_sqrt,
+                key.swapaxes(-1, -2) * self.scale_sqrt,
             )
         else:
             attention_scores = ops.baddbmm(
                 attention_mask.to(query.dtype),
-                query,
-                key.swapaxes(-1, -2),
+                query * self.scale_sqrt,
+                key.swapaxes(-1, -2) * self.scale_sqrt,
                 beta=1,
-                alpha=self.scale,
+                alpha=1,
             )
 
         if self.upcast_softmax:

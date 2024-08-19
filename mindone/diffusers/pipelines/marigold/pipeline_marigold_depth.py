@@ -61,10 +61,10 @@ Examples:
 >>> image = diffusers.utils.load_image("https://marigoldmonodepth.github.io/images/einstein.jpg")
 >>> depth = pipe(image)
 
->>> vis = pipe.image_processor.visualize_depth(depth.prediction)
+>>> vis = pipe.image_processor.visualize_depth(depth[0])
 >>> vis[0].save("einstein_depth.png")
 
->>> depth_16bit = pipe.image_processor.export_depth_to_16bit_png(depth.prediction)
+>>> depth_16bit = pipe.image_processor.export_depth_to_16bit_png(depth[0])
 >>> depth_16bit[0].save("einstein_depth_16bit.png")
 ```
 """
@@ -606,7 +606,7 @@ class MarigoldDepthPipeline(DiffusionPipeline):
     ) -> Tuple[ms.Tensor, ms.Tensor]:
         def retrieve_latents(encoder_output):
             if ops.is_tensor(encoder_output):
-                return encoder_output
+                return self.vae.diag_gauss_dist.mode(encoder_output)
             elif hasattr(encoder_output, "latents"):
                 return encoder_output.latents
             else:

@@ -717,7 +717,7 @@ class AnimateDiffSDXLPipeline(
         passed_add_embed_dim = (
             self.unet.config.addition_time_embed_dim * len(add_time_ids) + text_encoder_projection_dim
         )
-        expected_add_embed_dim = self.unet.add_embedding.linear_1.in_features
+        expected_add_embed_dim = self.unet.add_embedding.linear_1.in_channels
 
         if expected_add_embed_dim != passed_add_embed_dim:
             raise ValueError(
@@ -1195,7 +1195,7 @@ class AnimateDiffSDXLPipeline(
 
         if needs_upcasting:
             self.upcast_vae()
-            latents = latents.to(next(iter(self.vae.post_quant_conv.parameters())).dtype)
+            latents = latents.to(next(iter(self.vae.post_quant_conv.get_parameters())).dtype)
 
         # 10. Post processing
         if output_type == "latent":

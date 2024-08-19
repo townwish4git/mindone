@@ -54,12 +54,12 @@ Examples:
 
 >>> pipe = diffusers.MarigoldNormalsPipeline.from_pretrained(
 ...     "prs-eth/marigold-normals-lcm-v0-1", variant="fp16", mindspore_dtype=mindspore.float16
-... ).to("cuda")
+... )
 
 >>> image = diffusers.utils.load_image("https://marigoldmonodepth.github.io/images/einstein.jpg")
 >>> normals = pipe(image)
 
->>> vis = pipe.image_processor.visualize_normals(normals.prediction)
+>>> vis = pipe.image_processor.visualize_normals(normals[0])
 >>> vis[0].save("einstein_normals.png")
 ```
 """
@@ -579,7 +579,7 @@ class MarigoldNormalsPipeline(DiffusionPipeline):
     ) -> Tuple[ms.Tensor, ms.Tensor]:
         def retrieve_latents(encoder_output):
             if ops.is_tensor(encoder_output):
-                return encoder_output
+                return self.vae.diag_gauss_dist.mode(encoder_output)
             elif hasattr(encoder_output, "latents"):
                 return encoder_output.latents
             else:

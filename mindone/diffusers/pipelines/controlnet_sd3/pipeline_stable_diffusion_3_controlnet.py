@@ -50,7 +50,7 @@ EXAMPLE_DOC_STRING = """
         ... )
         >>> control_image = load_image("https://huggingface.co/InstantX/SD3-Controlnet-Canny/resolve/main/canny.jpg")
         >>> prompt = "A girl holding a sign that says InstantX"
-        >>> image = pipe(prompt, control_image=control_image, controlnet_conditioning_scale=0.7).images[0]
+        >>> image = pipe(prompt, control_image=control_image, controlnet_conditioning_scale=0.7)[0][0]
         >>> image.save("sd3.png")
         ```
 """
