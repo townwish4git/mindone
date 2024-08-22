@@ -244,7 +244,8 @@ class Attention(nn.Cell):
             # TODO: Remove it if flash attention has better supports.
             import bisect
 
-            self.flash_attn_valid_head_dims = [64, 80, 96, 120, 128, 256]
+            # Head Dim: The value ranges is a multiple of 16, with the max value of 512.
+            self.flash_attn_valid_head_dims = list(range(16, 513, 16))  # [16, 32, 48, ..., 512]
             self.head_dim = self.inner_dim // self.heads
             if self.head_dim in self.flash_attn_valid_head_dims:
                 self.head_dim_padding = 0
@@ -1004,12 +1005,9 @@ class XFormersAttnProcessor:
         # Memory efficient attention on mindspore uses flash attention under the hoods.
         # Flash attention implementation is called `FlashAttentionScore`
         # which is an experimental api with the following limitations:
-        # 1. Sequence length of query must be divisible by 16 and in range of [1, 32768].
-        # 2. Head dimensions must be one of [64, 80, 96, 120, 128, 256].
-        # 3. The input dtype must be float16 or bfloat16.
+        # 1. Head dimensions must be a multiple of 16, with the max value of 512.
+        # 2. The input dtype must be float16 or bfloat16.
         # Sequence length of query must be checked in runtime.
-        _, query_tokens, _ = query.shape
-        assert query_tokens % 16 == 0, f"Sequence length of query must be divisible by 16, but got {query_tokens=}."
         # Head dimension is checked in Attention.set_use_memory_efficient_attention_xformers. We maybe pad on head_dim.
         if attn.head_dim_padding > 0:
             query_padded = ops.pad(query, (0, attn.head_dim_padding), mode="constant", value=0.0)
