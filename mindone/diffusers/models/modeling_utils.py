@@ -13,10 +13,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import inspect
 import os
 from collections import OrderedDict
 from functools import partial
-from typing import Any, Callable, List, Optional, Union
+from pathlib import Path
+from typing import Any, Callable, Optional, Union
 
 from huggingface_hub import create_repo
 from huggingface_hub.utils import validate_hf_hub_args
@@ -24,13 +26,11 @@ from huggingface_hub.utils import validate_hf_hub_args
 import mindspore as ms
 from mindspore import nn, ops
 
-from mindone.safetensors.mindspore import load_file as safe_load_file
 from mindone.safetensors.mindspore import save_file as safe_save_file
 
 from .. import __version__
 from ..utils import (
     CONFIG_NAME,
-    SAFETENSORS_FILE_EXTENSION,
     SAFETENSORS_WEIGHTS_NAME,
     WEIGHTS_NAME,
     _add_variant,
@@ -39,6 +39,7 @@ from ..utils import (
     logging,
 )
 from ..utils.hub_utils import PushToHubMixin, load_or_create_model_card, populate_model_card
+from .model_loading_utils import _load_state_dict_into_model, load_state_dict
 
 logger = logging.get_logger(__name__)
 
@@ -82,54 +83,6 @@ def get_parameter_dtype(module: nn.Cell) -> ms.Type:
         return params[0].dtype
 
 
-def load_state_dict(checkpoint_file: Union[str, os.PathLike], variant: Optional[str] = None):
-    """
-    Reads a checkpoint file, returning properly formatted errors if they arise.
-    """
-    try:
-        file_extension = os.path.basename(checkpoint_file).split(".")[-1]
-        if file_extension == SAFETENSORS_FILE_EXTENSION:
-            return safe_load_file(checkpoint_file)
-        else:
-            raise NotImplementedError(
-                f"Only supports deserialization of weights file in safetensors format, but got {checkpoint_file}"
-            )
-    except Exception as e:
-        try:
-            with open(checkpoint_file) as f:
-                if f.read().startswith("version"):
-                    raise OSError(
-                        "You seem to have cloned a repository without having git-lfs installed. Please install "
-                        "git-lfs and run `git lfs install` followed by `git lfs pull` in the folder "
-                        "you cloned."
-                    )
-                else:
-                    raise ValueError(
-                        f"Unable to locate the file {checkpoint_file} which is necessary to load this pretrained "
-                        "model. Make sure you have saved the model properly."
-                    ) from e
-        except (UnicodeDecodeError, ValueError):
-            raise OSError(
-                f"Unable to load weights from checkpoint file for '{checkpoint_file}' " f"at '{checkpoint_file}'. "
-            )
-
-
-def _load_state_dict_into_model(model_to_load, state_dict: OrderedDict) -> List[str]:
-    # TODO: error_msgs is always empty for now. Maybe we need to rewrite MindSpore's `load_param_into_net`.
-    #  Error msgs should contain caught exception like size mismatch instead of missing/unexpected keys.
-    # TODO: We should support loading float16 state_dict into float32 model, like PyTorch's behavior.
-    error_msgs = []
-    # TODO: State dict loading in mindspore does not cast dtype correctly. We do it manually. It's might unsafe.
-    local_state = {k: v for k, v in model_to_load.parameters_and_names()}
-    for k, v in state_dict.items():
-        if k in local_state:
-            v.set_dtype(local_state[k].dtype)
-        else:
-            pass  # unexpect key keeps origin dtype
-    ms.load_param_into_net(model_to_load, state_dict, strict_load=True)
-    return error_msgs
-
-
 class ModelMixin(nn.Cell, PushToHubMixin):
     r"""
     Base class for all models.
@@ -144,6 +97,7 @@ class ModelMixin(nn.Cell, PushToHubMixin):
     _automatically_saved_args = ["_diffusers_version", "_class_name", "_name_or_path"]
     _supports_gradient_checkpointing = False
     _keys_to_ignore_on_load_unexpected = None
+    _no_split_modules = None
 
     def __init__(self):
         super().__init__()
@@ -283,6 +237,9 @@ class ModelMixin(nn.Cell, PushToHubMixin):
             logger.error(f"Provided path ({save_directory}) should be a directory, not a file")
             return
 
+        weights_name = SAFETENSORS_WEIGHTS_NAME if safe_serialization else WEIGHTS_NAME
+        weights_name = _add_variant(weights_name, variant)
+
         os.makedirs(save_directory, exist_ok=True)
 
         if push_to_hub:
@@ -304,9 +261,6 @@ class ModelMixin(nn.Cell, PushToHubMixin):
         # Save the model
         state_dict = {k: v for k, v in model_to_save.parameters_and_names()}
 
-        weights_name = SAFETENSORS_WEIGHTS_NAME if safe_serialization else WEIGHTS_NAME
-        weights_name = _add_variant(weights_name, variant)
-
         # Save the model
         if safe_serialization:
             safe_save_file(state_dict, os.path.join(save_directory, weights_name), metadata={"format": "np"})
@@ -319,7 +273,7 @@ class ModelMixin(nn.Cell, PushToHubMixin):
             # Create a new empty model card and eventually tag it
             model_card = load_or_create_model_card(repo_id, token=token)
             model_card = populate_model_card(model_card)
-            model_card.save(os.path.join(save_directory, "README.md"))
+            model_card.save(Path(save_directory, "README.md").as_posix())
 
             self._upload_folder(
                 save_directory,
@@ -356,9 +310,9 @@ class ModelMixin(nn.Cell, PushToHubMixin):
             force_download (`bool`, *optional*, defaults to `False`):
                 Whether or not to force the (re-)download of the model weights and configuration files, overriding the
                 cached versions if they exist.
-            resume_download (`bool`, *optional*, defaults to `False`):
-                Whether or not to resume downloading the model weights and configuration files. If set to `False`, any
-                incompletely downloaded files are deleted.
+            resume_download:
+                Deprecated and ignored. All downloads are now resumed by default when possible. Will be removed in v1
+                of Diffusers.
             proxies (`Dict[str, str]`, *optional*):
                 A dictionary of proxy servers to use by protocol or endpoint, for example, `{'http': 'foo.bar:3128',
                 'http://hostname': 'foo.bar:4012'}`. The proxies are used on each request.
@@ -419,7 +373,7 @@ class ModelMixin(nn.Cell, PushToHubMixin):
         ignore_mismatched_sizes = kwargs.pop("ignore_mismatched_sizes", False)
         force_download = kwargs.pop("force_download", False)
         from_flax = kwargs.pop("from_flax", False)
-        resume_download = kwargs.pop("resume_download", False)
+        resume_download = kwargs.pop("resume_download", None)
         proxies = kwargs.pop("proxies", None)
         output_loading_info = kwargs.pop("output_loading_info", False)
         local_files_only = kwargs.pop("local_files_only", None)
@@ -643,6 +597,15 @@ class ModelMixin(nn.Cell, PushToHubMixin):
 
         return model, missing_keys, unexpected_keys, mismatched_keys, error_msgs
 
+    @classmethod
+    def _get_signature_keys(cls, obj):
+        parameters = inspect.signature(obj.__init__).parameters
+        required_parameters = {k: v for k, v in parameters.items() if v.default == inspect._empty}
+        optional_parameters = set({k for k, v in parameters.items() if v.default != inspect._empty})
+        expected_modules = set(required_parameters.keys()) - {"self"}
+
+        return expected_modules, optional_parameters
+
     def to(self, dtype: Optional[ms.Type] = None):
         for p in self.get_parameters():
             p.set_dtype(dtype)
@@ -746,3 +709,58 @@ class ModelMixin(nn.Cell, PushToHubMixin):
                 state_dict[f"{path}.to_out.0.weight"] = state_dict.pop(f"{path}.proj_attn.weight")
             if f"{path}.proj_attn.bias" in state_dict:
                 state_dict[f"{path}.to_out.0.bias"] = state_dict.pop(f"{path}.proj_attn.bias")
+
+
+class LegacyModelMixin(ModelMixin):
+    r"""
+    A subclass of `ModelMixin` to resolve class mapping from legacy classes (like `Transformer2DModel`) to more
+    pipeline-specific classes (like `DiTTransformer2DModel`).
+    """
+
+    @classmethod
+    @validate_hf_hub_args
+    def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs):
+        # To prevent depedency import problem.
+        from .model_loading_utils import _fetch_remapped_cls_from_config
+
+        # Create a copy of the kwargs so that we don't mess with the keyword arguments in the downstream calls.
+        kwargs_copy = kwargs.copy()
+
+        cache_dir = kwargs.pop("cache_dir", None)
+        force_download = kwargs.pop("force_download", False)
+        resume_download = kwargs.pop("resume_download", None)
+        proxies = kwargs.pop("proxies", None)
+        local_files_only = kwargs.pop("local_files_only", None)
+        token = kwargs.pop("token", None)
+        revision = kwargs.pop("revision", None)
+        subfolder = kwargs.pop("subfolder", None)
+
+        # Load config if we don't provide a configuration
+        config_path = pretrained_model_name_or_path
+
+        user_agent = {
+            "diffusers": __version__,
+            "file_type": "model",
+            "framework": "pytorch",
+        }
+
+        # load config
+        config, _, _ = cls.load_config(
+            config_path,
+            cache_dir=cache_dir,
+            return_unused_kwargs=True,
+            return_commit_hash=True,
+            force_download=force_download,
+            resume_download=resume_download,
+            proxies=proxies,
+            local_files_only=local_files_only,
+            token=token,
+            revision=revision,
+            subfolder=subfolder,
+            user_agent=user_agent,
+            **kwargs,
+        )
+        # resolve remapping
+        remapped_class = _fetch_remapped_cls_from_config(config, cls)
+
+        return remapped_class.from_pretrained(pretrained_model_name_or_path, **kwargs_copy)
