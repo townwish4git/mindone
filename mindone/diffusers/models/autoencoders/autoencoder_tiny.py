@@ -14,7 +14,9 @@
 
 
 from dataclasses import dataclass
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
+
+import numpy as np
 
 import mindspore as ms
 from mindspore import ops
@@ -171,7 +173,9 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
 
         return AutoencoderTinyOutput(latents=output)
 
-    def decode(self, x: ms.Tensor, return_dict: bool = False) -> Union[DecoderOutput, Tuple[ms.Tensor]]:
+    def decode(
+        self, x: ms.Tensor, generator: Optional[np.random.Generator] = None, return_dict: bool = False
+    ) -> Union[DecoderOutput, Tuple[ms.Tensor]]:
         output = self.decoder(x)
 
         if not return_dict:
