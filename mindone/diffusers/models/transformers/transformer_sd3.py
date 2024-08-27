@@ -19,7 +19,7 @@ import mindspore as ms
 from mindspore import nn
 
 from ...configuration_utils import ConfigMixin, register_to_config
-from ...loaders import PeftAdapterMixin
+from ...loaders import FromOriginalModelMixin, PeftAdapterMixin
 from ...models.attention import JointTransformerBlock
 from ...models.attention_processor import AttentionProcessor
 from ...models.modeling_utils import ModelMixin
@@ -31,7 +31,7 @@ from .transformer_2d import Transformer2DModelOutput
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
-class SD3Transformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin):
+class SD3Transformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, FromOriginalModelMixin):
     """
     The Transformer model introduced in Stable Diffusion 3.
 

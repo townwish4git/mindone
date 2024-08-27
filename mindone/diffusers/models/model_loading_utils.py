@@ -177,7 +177,7 @@ _SAFE_WEIGHTS_NAME = f"{_SAFE_MODEL_NAME}.safetensors"
 def load_checkpoint_and_dispatch(
     model: nn.Cell,
     checkpoint: Union[str, os.PathLike],
-    dtype: Optional[Union[str, ms.type]] = None,
+    dtype: Optional[Union[str, ms.Type]] = None,
     strict: bool = False,
 ):
     """

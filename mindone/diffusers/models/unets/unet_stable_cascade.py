@@ -23,8 +23,7 @@ from mindspore import nn, ops
 from mindspore.common.initializer import Constant, Normal, XavierNormal, initializer
 
 from ...configuration_utils import ConfigMixin, register_to_config
-
-# from ...loaders.unet import FromOriginalUNetMixin
+from ...loaders import FromOriginalModelMixin
 from ...utils import BaseOutput
 from ..attention_processor import Attention
 from ..modeling_utils import ModelMixin
@@ -139,8 +138,7 @@ class StableCascadeUNetOutput(BaseOutput):
     sample: ms.Tensor = None
 
 
-# class StableCascadeUNet(ModelMixin, ConfigMixin, FromOriginalUNetMixin):
-class StableCascadeUNet(ModelMixin, ConfigMixin):
+class StableCascadeUNet(ModelMixin, ConfigMixin, FromOriginalModelMixin):
     _supports_gradient_checkpointing = True
 
     @register_to_config
