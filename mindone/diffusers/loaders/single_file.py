@@ -21,7 +21,7 @@ from packaging import version
 
 from mindspore import nn
 
-from ..utils import deprecate, is_transformers_available, logging
+from ..utils import deprecate, is_transformers_available, logging, maybe_import_module_in_mindone
 from .single_file_utils import (
     SingleFileComponentError,
     _is_model_weights_in_cached_folder,
@@ -69,15 +69,19 @@ def load_single_file_sub_model(
         class_obj = getattr(pipeline_module, class_name)
     else:
         # else we just import it from the library.
-        library = importlib.import_module(library_name)
-        class_obj = getattr(library, class_name)
+        library = maybe_import_module_in_mindone(library_name)
+        if hasattr(library, class_name):
+            class_obj = getattr(library, class_name)
+        else:
+            library = maybe_import_module_in_mindone(library_name, force_original=True)
+            class_obj = getattr(library, class_name)
 
     if is_transformers_available():
         transformers_version = version.parse(version.parse(transformers.__version__).base_version)
     else:
         transformers_version = "N/A"
 
-    is_transformers_model = is_transformers_available() and issubclass(class_obj, PreTrainedModel)
+    is_transformers_model = issubclass(class_obj, PreTrainedModel)
     is_tokenizer = (
         is_transformers_available()
         and issubclass(class_obj, PreTrainedTokenizer)
@@ -461,7 +465,7 @@ class FromSingleFileMixin:
         init_kwargs = {k: init_dict.pop(k) for k in optional_kwargs if k in init_dict}
         init_kwargs = {**init_kwargs, **passed_pipe_kwargs}
 
-        from diffusers import pipelines
+        from mindone.diffusers import pipelines
 
         # remove `null` components
         def load_module(name, value):

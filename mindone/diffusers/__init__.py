@@ -1,4 +1,4 @@
-__version__ = "0.27.1"
+__version__ = "0.29.2"
 
 from typing import TYPE_CHECKING
 
@@ -13,6 +13,7 @@ from .utils import _LazyModule
 
 _import_structure = {
     "configuration_utils": ["ConfigMixin"],
+    "loaders": ["FromOriginalModelMixin"],
     "models": [
         "AsymmetricAutoencoderKL",
         "AutoencoderKL",

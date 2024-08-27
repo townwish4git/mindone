@@ -725,7 +725,7 @@ class UNet2DConditionLoadersMixin:
                     diffusers_name = diffusers_name.replace("3.1.3", "3.ff.1.net.2")
                     updated_state_dict[diffusers_name] = value
                     updated_state_dict[diffusers_name] = value
-        _load_param_into_net(image_projection, updated_state_dict, mindspore_dtype=self.dtype)
+        _load_param_into_net(image_projection, updated_state_dict)
 
         return image_projection
 
@@ -782,7 +782,7 @@ class UNet2DConditionLoadersMixin:
                     value_dict.update({f"to_k_ip.{i}.weight": state_dict["ip_adapter"][f"{key_id}.to_k_ip.weight"]})
                     value_dict.update({f"to_v_ip.{i}.weight": state_dict["ip_adapter"][f"{key_id}.to_v_ip.weight"]})
 
-                _load_param_into_net(attn_procs[name], value_dict, self.dtype)
+                _load_param_into_net(attn_procs[name], value_dict)
 
                 key_id += 2
 

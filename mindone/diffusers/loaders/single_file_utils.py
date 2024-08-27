@@ -767,9 +767,9 @@ def update_vae_attentions_ldm_to_diffusers(keys, new_checkpoint, checkpoint, map
         shape = new_checkpoint[diffusers_key].shape
 
         if len(shape) == 3:
-            new_checkpoint[diffusers_key] = new_checkpoint[diffusers_key][:, :, 0]
+            new_checkpoint[diffusers_key] = Parameter(new_checkpoint[diffusers_key][:, :, 0], name=diffusers_key)
         elif len(shape) == 4:
-            new_checkpoint[diffusers_key] = new_checkpoint[diffusers_key][:, :, 0, 0]
+            new_checkpoint[diffusers_key] = Parameter(new_checkpoint[diffusers_key][:, :, 0, 0], name=diffusers_key)
 
 
 def convert_stable_cascade_unet_single_file_to_diffusers(checkpoint, **kwargs):
@@ -1369,7 +1369,7 @@ def create_diffusers_clip_model_from_ldm(
     model_config = cls.config_class.from_pretrained(**config, subfolder=subfolder, local_files_only=local_files_only)
     model = cls(model_config)
 
-    position_embedding_dim = model.text_model.embeddings.position_embedding.weight.shape[-1]
+    position_embedding_dim = model.text_model.embeddings.position_embedding.embedding_table.shape[-1]
 
     if is_clip_model(checkpoint):
         diffusers_format_checkpoint = convert_ldm_clip_checkpoint(checkpoint)
@@ -1409,11 +1409,11 @@ def create_diffusers_clip_model_from_ldm(
         and checkpoint[CHECKPOINT_KEY_NAMES["open_clip_sd3"]].shape[-1] == position_embedding_dim
     ):
         diffusers_format_checkpoint = convert_ldm_clip_checkpoint(checkpoint, "text_encoders.clip_g.transformer.")
-        diffusers_format_checkpoint = _convert_state_dict(model, diffusers_format_checkpoint)
 
     else:
         raise ValueError("The provided checkpoint does not seem to contain a valid CLIP model.")
 
+    diffusers_format_checkpoint = _convert_state_dict(model, diffusers_format_checkpoint)
     _, unexpected_keys = _load_param_into_net(model, diffusers_format_checkpoint, mindspore_dtype)
 
     if model._keys_to_ignore_on_load_unexpected is not None:
@@ -1829,13 +1829,15 @@ def create_diffusers_t5_model_from_checkpoint(
     return model
 
 
-def _load_param_into_net(model, state_dict, mindspore_dtype):
+def _load_param_into_net(model, state_dict, mindspore_dtype=None):
     model_dtype = next(iter(model.get_parameters())).dtype
+    state_dict_dtype = next(iter(state_dict.values())).dtype
+    mindspore_dtype = mindspore_dtype or model_dtype
+
     if model_dtype != mindspore_dtype:
         for p in model.get_parameters():
             p.set_dtype(mindspore_dtype)
 
-    state_dict_dtype = next(iter(state_dict.values())).dtype
     if state_dict_dtype != mindspore_dtype:
         for v in state_dict.values():
             v.set_dtype(mindspore_dtype)
