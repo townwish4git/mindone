@@ -53,9 +53,12 @@ The table below represents the current support in mindone/diffusers for each of 
 |       AttnSkipDownBlock2D        |       ❌       |       ✅       |     ✅      |     ✅      |                contains FirDownsample2D                 |
 |         SkipDownBlock2D          |       ❌       |       ✅       |     ✅      |     ✅      |                contains FirDownsample2D                 |
 |   ResnetBlock2D (kernel='fir')   |       ❌       |       ✅       |     ✅      |     ✅      | ops.Conv2D has poor precision in fp16 and PyNative mode |
+|      AutoencoderKLCogVideoX      |       ✅       |       ❌       |     ✅      |     ❌      |             contains nn.Conv3d as sub cells             |
+|        CogVideoXEncoder3D        |       ✅       |       ❌       |     ✅      |     ❌      |             contains nn.Conv3d as sub cells             |
+|        CogVideoXDecoder3D        |       ✅       |       ❌       |     ✅      |     ❌      |             contains nn.Conv3d as sub cells             |
 
 ## Pipelines
-The table below represents the current support in mindone/diffusers for each of those pipelines in **MindSpore 2.3.0**,
+The table below represents the current support in mindone/diffusers for each of those pipelines in **MindSpore 2.3.1**,
 whether they have support in Pynative fp16 mode, Graph fp16 mode, Pynative fp32 mode or Graph fp32 mode.
 
 > precision issues of pipelines, the experiments in the table below default to upcasting GroupNorm to FP32 to avoid
@@ -66,6 +69,7 @@ whether they have support in Pynative fp16 mode, Graph fp16 mode, Pynative fp32 
 |            AnimateDiffPipeline             | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |                                                                                                                                                                               |
 |      AnimateDiffVideoToVideoPipeline       | :white_check_mark: |        :x:         | :white_check_mark: | :white_check_mark: |                                                        In FP32 and Pynative mode, this pipeline will run out of memory                                                        |
 |           BlipDiffusionPipeline            | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |                                                                                                                                                                               |
+|             CogVideoXPipeline              | :white_check_mark: |        :x:         | :white_check_mark: |        :x:         |  This pipeline uses `AutoencoderKLCogVideoX` and `ops.operations.nn_ops.FlashAttentionScore`, neither of which supports fp32  |
 |          ConsistencyModelPipeline          | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |                                                                                                                                                                               |
 |                DDIMPipeline                | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |                                                                                                                                                                               |
 |                DDPMPipeline                | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |                                                                                                                                                                               |
