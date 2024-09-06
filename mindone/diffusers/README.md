@@ -87,24 +87,133 @@ Check out the [Quickstart](https://huggingface.co/docs/diffusers/quicktour) to l
 
 ## Roadmap
 
-In short, only the model, scheduler, pipeline and the training code related to StableDiffusionXL are currently available.
-Most base, utility and mixin class are available.
+Most features in 🤗 Diffusers with version **0.29.2** are currently available, including **all models**, **all loaders**, most **schedulers** and **most pipelines**. The specific support status is as follows.
+
+Note that there are still a few features that we have not yet supported due to limited manpower. To complete them, any contribution is welcome!
 
 ### Pipeline
+
+We are offering over 80 pipelines for inference of diffusion-related models, covering 80% of the original 🤗 Diffusers' pipelines. 
+
+<details>
+  <summary>Pipelines support status, click to expand.</summary>
+
+- [ ] AmusedImg2ImgPipeline
+- [ ] AmusedInpaintPipeline
+- [ ] AmusedPipeline
+- [x] AnimateDiffPipeline
+- [x] AnimateDiffSDXLPipeline
+- [x] AnimateDiffVideoToVideoPipeline
+- [ ] AudioLDM2Pipeline
+- [ ] AudioLDMPipeline
+- [x] BlipDiffusionControlNetPipeline
+- [x] BlipDiffusionPipeline
+- [x] ConsistencyModelPipeline
 - [x] DDIMPipeline
 - [x] DDPMPipeline
+- [x] DanceDiffusionPipeline
+- [x] DiTPipeline
+- [x] HunyuanDiTPipeline
+- [x] I2VGenXLPipeline
+- [x] IFImg2ImgPipeline
+- [x] IFImg2ImgSuperResolutionPipeline
+- [x] IFInpaintingPipeline
+- [x] IFInpaintingSuperResolutionPipeline
+- [x] IFPipeline
+- [x] IFSuperResolutionPipeline
+- [x] Kandinsky3Img2ImgPipeline
+- [x] Kandinsky3Pipeline
+- [x] KandinskyCombinedPipeline
+- [x] KandinskyImg2ImgCombinedPipeline
+- [x] KandinskyImg2ImgPipeline
+- [x] KandinskyInpaintCombinedPipeline
+- [x] KandinskyInpaintPipeline
+- [x] KandinskyPipeline
+- [x] KandinskyPriorPipeline
+- [x] KandinskyV22CombinedPipeline
+- [x] KandinskyV22ControlnetImg2ImgPipeline
+- [x] KandinskyV22ControlnetPipeline
+- [x] KandinskyV22Img2ImgCombinedPipeline
+- [x] KandinskyV22Img2ImgPipeline
+- [x] KandinskyV22InpaintCombinedPipeline
+- [x] KandinskyV22InpaintPipeline
+- [x] KandinskyV22Pipeline
+- [x] KandinskyV22PriorEmb2EmbPipeline
+- [x] KandinskyV22PriorPipeline
+- [x] LDMSuperResolutionPipeline
+- [x] LDMTextToImagePipeline
+- [x] LatentConsistencyModelImg2ImgPipeline
+- [x] LatentConsistencyModelPipeline
+- [x] MarigoldDepthPipeline
+- [x] MarigoldNormalsPipeline
+- [ ] MusicLDMPipeline
+- [ ] PIAPipeline
+- [ ] PaintByExamplePipeline
+- [x] PixArtAlphaPipeline
+- [x] PixArtSigmaPipeline
+- [ ] SemanticStableDiffusionPipeline
+- [x] ShapEImg2ImgPipeline
+- [x] ShapEPipeline
+- [x] StableCascadeCombinedPipeline
+- [x] StableCascadeDecoderPipeline
+- [x] StableCascadePriorPipeline
+- [x] StableDiffusion3ControlNetPipeline
+- [x] StableDiffusion3Img2ImgPipeline
+- [x] StableDiffusion3Pipeline
+- [x] StableDiffusionAdapterPipeline
+- [ ] StableDiffusionAttendAndExcitePipeline
+- [x] StableDiffusionControlNetImg2ImgPipeline
+- [x] StableDiffusionControlNetInpaintPipeline
+- [x] StableDiffusionControlNetPipeline
+- [x] StableDiffusionControlNetXSPipeline
+- [x] StableDiffusionDepth2ImgPipeline
+- [x] StableDiffusionDiffEditPipeline
+- [x] StableDiffusionGLIGENPipeline
+- [x] StableDiffusionGLIGENTextImagePipeline
+- [x] StableDiffusionImageVariationPipeline
+- [x] StableDiffusionImg2ImgPipeline
+- [x] StableDiffusionInpaintPipeline
+- [x] StableDiffusionInstructPix2PixPipeline
+- [ ] StableDiffusionLDM3DPipeline
+- [ ] StableDiffusionLDM3DPipeline
+- [x] StableDiffusionLatentUpscalePipeline
+- [ ] StableDiffusionPanoramaPipeline
+- [x] StableDiffusionPipeline
+- [ ] StableDiffusionSAGPipeline
+- [x] StableDiffusionUpscalePipeline
+- [x] StableDiffusionXLAdapterPipeline
+- [x] StableDiffusionXLControlNetImg2ImgPipeline
+- [x] StableDiffusionXLControlNetInpaintPipeline
+- [x] StableDiffusionXLControlNetPipeline
+- [x] StableDiffusionXLControlNetXSPipeline
+- [x] StableDiffusionXLImg2ImgPipeline
+- [x] StableDiffusionXLInpaintPipeline
+- [x] StableDiffusionXLInstructPix2PixPipeline
 - [x] StableDiffusionXLPipeline
-- [ ] StableDiffusionPipeline
+- [ ] StableUnCLIPImg2ImgPipeline
+- [ ] StableUnCLIPPipeline
+- [x] StableVideoDiffusionPipeline
+- [ ] TextToVideoSDPipeline
+- [ ] TextToVideoZeroPipeline
+- [ ] TextToVideoZeroSDXLPipeline
+- [x] UnCLIPImageVariationPipeline
+- [x] UnCLIPPipeline
+- [ ] UniDiffuserPipeline
+- [ ] VideoToVideoSDPipeline
+- [x] WuerstchenCombinedPipeline
+- [x] WuerstchenDecoderPipeline
+- [x] WuerstchenPriorPipeline
+</details>
 
 ### Model
-- All Supported
+- [x] All Supported
 
 ### Scheduler
 - [x] DDIMScheduler/DDPMScheduler/...(30)
 - [ ] DPMSolverSDEScheduler
 
 ### Loader
-- All Supported
+- [x] All Supported
 
 ## Limitations
 
