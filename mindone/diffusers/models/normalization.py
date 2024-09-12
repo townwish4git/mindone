@@ -23,7 +23,7 @@ from mindspore.common.initializer import initializer
 
 from .activations import get_activation
 from .embeddings import CombinedTimestepLabelEmbeddings, PixArtAlphaCombinedTimestepSizeEmbeddings
-from .layers_compat import group_norm
+from .layers_compat import group_norm, Linear
 
 
 class AdaLayerNorm(nn.Cell):
@@ -39,7 +39,7 @@ class AdaLayerNorm(nn.Cell):
         super().__init__()
         self.emb = nn.Embedding(num_embeddings, embedding_dim)
         self.silu = nn.SiLU()
-        self.linear = nn.Dense(embedding_dim, embedding_dim * 2)
+        self.linear = Linear(embedding_dim, embedding_dim * 2)
         self.norm = LayerNorm(embedding_dim, elementwise_affine=False)
 
     def construct(self, x: ms.Tensor, timestep: ms.Tensor) -> ms.Tensor:
@@ -68,7 +68,7 @@ class AdaLayerNormZero(nn.Cell):
             self.emb = None
 
         self.silu = nn.SiLU()
-        self.linear = nn.Dense(embedding_dim, 6 * embedding_dim, has_bias=True)
+        self.linear = Linear(embedding_dim, 6 * embedding_dim, bias=True)
         self.norm = LayerNorm(embedding_dim, elementwise_affine=False, eps=1e-6)
 
     def construct(
@@ -106,7 +106,7 @@ class AdaLayerNormSingle(nn.Cell):
         )
 
         self.silu = nn.SiLU()
-        self.linear = nn.Dense(embedding_dim, 6 * embedding_dim, has_bias=True)
+        self.linear = Linear(embedding_dim, 6 * embedding_dim, bias=True)
 
     def construct(
         self,
@@ -144,7 +144,7 @@ class AdaGroupNorm(nn.Cell):
         else:
             self.act = get_activation(act_fn)()
 
-        self.linear = nn.Dense(embedding_dim, out_dim * 2)
+        self.linear = Linear(embedding_dim, out_dim * 2)
 
     def construct(self, x: ms.Tensor, emb: ms.Tensor) -> ms.Tensor:
         if self.act:
@@ -175,7 +175,7 @@ class AdaLayerNormContinuous(nn.Cell):
     ):
         super().__init__()
         self.silu = nn.SiLU()
-        self.linear = nn.Dense(conditioning_embedding_dim, embedding_dim * 2, has_bias=bias)
+        self.linear = Linear(conditioning_embedding_dim, embedding_dim * 2, bias=bias)
         if norm_type == "layer_norm":
             self.norm = LayerNorm(embedding_dim, eps, elementwise_affine, bias=bias)
         elif norm_type == "rms_norm":

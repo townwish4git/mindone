@@ -18,6 +18,7 @@ from mindspore import nn, ops
 
 from ..image_processor import IPAdapterMaskProcessor
 from ..utils import logging
+from .layers_compat import Linear
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -171,15 +172,15 @@ class Attention(nn.Cell):
                 f"unknown cross_attention_norm: {cross_attention_norm}. Should be None, 'layer_norm' or 'group_norm'"
             )
 
-        linear_cls = nn.Dense
+        linear_cls = Linear
 
         self.linear_cls = linear_cls
-        self.to_q = linear_cls(query_dim, self.inner_dim, has_bias=bias)
+        self.to_q = linear_cls(query_dim, self.inner_dim, bias=bias)
 
         if not self.only_cross_attention:
             # only relevant for the `AddedKVProcessor` classes
-            self.to_k = linear_cls(self.cross_attention_dim, self.inner_dim, has_bias=bias)
-            self.to_v = linear_cls(self.cross_attention_dim, self.inner_dim, has_bias=bias)
+            self.to_k = linear_cls(self.cross_attention_dim, self.inner_dim, bias=bias)
+            self.to_v = linear_cls(self.cross_attention_dim, self.inner_dim, bias=bias)
         else:
             self.to_k = None
             self.to_v = None
@@ -188,12 +189,12 @@ class Attention(nn.Cell):
             self.add_k_proj = linear_cls(added_kv_proj_dim, self.inner_dim)
             self.add_v_proj = linear_cls(added_kv_proj_dim, self.inner_dim)
             if self.context_pre_only is not None:
-                self.add_q_proj = nn.Dense(added_kv_proj_dim, self.inner_dim)
+                self.add_q_proj = Linear(added_kv_proj_dim, self.inner_dim)
 
-        self.to_out = nn.CellList([linear_cls(self.inner_dim, self.out_dim, has_bias=out_bias), nn.Dropout(p=dropout)])
+        self.to_out = nn.CellList([linear_cls(self.inner_dim, self.out_dim, bias=out_bias), nn.Dropout(p=dropout)])
 
         if self.context_pre_only is not None and not self.context_pre_only:
-            self.to_add_out = nn.Dense(self.inner_dim, self.out_dim, has_bias=out_bias)
+            self.to_add_out = Linear(self.inner_dim, self.out_dim, bias=out_bias)
 
         # set attention processor
         # We use the AttnProcessor2_0 by default when torch 2.x is used which uses
@@ -527,7 +528,7 @@ class Attention(nn.Cell):
             out_features = concatenated_weights.shape[0]
 
             # create a new single projection layer and copy over the weights.
-            self.to_qkv = self.linear_cls(in_features, out_features, has_bias=self.use_bias, dtype=dtype)
+            self.to_qkv = self.linear_cls(in_features, out_features, bias=self.use_bias, dtype=dtype)
             self.to_qkv.weight.set_data(concatenated_weights)
             if self.use_bias:
                 concatenated_bias = ops.cat([self.to_q.bias, self.to_k.bias, self.to_v.bias])
@@ -538,7 +539,7 @@ class Attention(nn.Cell):
             in_features = concatenated_weights.shape[1]
             out_features = concatenated_weights.shape[0]
 
-            self.to_kv = self.linear_cls(in_features, out_features, has_bias=self.use_bias, dtype=dtype)
+            self.to_kv = self.linear_cls(in_features, out_features, bias=self.use_bias, dtype=dtype)
             self.to_kv.weight.set_data(concatenated_weights)
             if self.use_bias:
                 concatenated_bias = ops.cat([self.to_k.bias, self.to_v.bias])

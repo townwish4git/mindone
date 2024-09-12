@@ -21,6 +21,7 @@ from mindspore import nn, ops
 
 from .activations import FP32SiLU, get_activation
 from .attention_processor import Attention
+from .layers_compat import Linear
 
 
 def get_timestep_embedding(
@@ -244,12 +245,12 @@ class TimestepEmbedding(nn.Cell):
         sample_proj_bias=True,
     ):
         super().__init__()
-        linear_cls = nn.Dense
+        linear_cls = Linear
 
-        self.linear_1 = linear_cls(in_channels, time_embed_dim, has_bias=sample_proj_bias)
+        self.linear_1 = linear_cls(in_channels, time_embed_dim, bias=sample_proj_bias)
 
         if cond_proj_dim is not None:
-            self.cond_proj = nn.Dense(cond_proj_dim, in_channels, has_bias=False)
+            self.cond_proj = Linear(cond_proj_dim, in_channels, bias=False)
         else:
             self.cond_proj = None
 
@@ -259,7 +260,7 @@ class TimestepEmbedding(nn.Cell):
             time_embed_dim_out = out_dim
         else:
             time_embed_dim_out = time_embed_dim
-        self.linear_2 = linear_cls(time_embed_dim, time_embed_dim_out, has_bias=sample_proj_bias)
+        self.linear_2 = linear_cls(time_embed_dim, time_embed_dim_out, bias=sample_proj_bias)
 
         if post_act_fn is None:
             self.post_act = None
@@ -467,8 +468,8 @@ class TextImageProjection(nn.Cell):
         super().__init__()
 
         self.num_image_text_embeds = num_image_text_embeds
-        self.image_embeds = nn.Dense(image_embed_dim, self.num_image_text_embeds * cross_attention_dim)
-        self.text_proj = nn.Dense(text_embed_dim, cross_attention_dim)
+        self.image_embeds = Linear(image_embed_dim, self.num_image_text_embeds * cross_attention_dim)
+        self.text_proj = Linear(text_embed_dim, cross_attention_dim)
 
     def construct(self, text_embeds: ms.Tensor, image_embeds: ms.Tensor):
         batch_size = text_embeds.shape[0]
@@ -494,7 +495,7 @@ class ImageProjection(nn.Cell):
         from .normalization import LayerNorm
 
         self.num_image_text_embeds = num_image_text_embeds
-        self.image_embeds = nn.Dense(image_embed_dim, self.num_image_text_embeds * cross_attention_dim)
+        self.image_embeds = Linear(image_embed_dim, self.num_image_text_embeds * cross_attention_dim)
         self.norm = LayerNorm(cross_attention_dim)
 
     def construct(self, image_embeds: ms.Tensor):
@@ -566,7 +567,7 @@ class TextTimeEmbedding(nn.Cell):
 
         self.norm1 = LayerNorm(encoder_dim)
         self.pool = AttentionPooling(num_heads, encoder_dim)
-        self.proj = nn.Dense(encoder_dim, time_embed_dim)
+        self.proj = Linear(encoder_dim, time_embed_dim)
         self.norm2 = LayerNorm(time_embed_dim)
 
     def construct(self, hidden_states):
@@ -582,9 +583,9 @@ class TextImageTimeEmbedding(nn.Cell):
         super().__init__()
         from .normalization import LayerNorm
 
-        self.text_proj = nn.Dense(text_embed_dim, time_embed_dim)
+        self.text_proj = Linear(text_embed_dim, time_embed_dim)
         self.text_norm = LayerNorm(time_embed_dim)
-        self.image_proj = nn.Dense(image_embed_dim, time_embed_dim)
+        self.image_proj = Linear(image_embed_dim, time_embed_dim)
 
     def construct(self, text_embeds: ms.Tensor, image_embeds: ms.Tensor):
         # text
@@ -602,7 +603,7 @@ class ImageTimeEmbedding(nn.Cell):
         super().__init__()
         from .normalization import LayerNorm
 
-        self.image_proj = nn.Dense(image_embed_dim, time_embed_dim)
+        self.image_proj = Linear(image_embed_dim, time_embed_dim)
         self.image_norm = LayerNorm(time_embed_dim)
 
     def construct(self, image_embeds: ms.Tensor):
@@ -617,7 +618,7 @@ class ImageHintTimeEmbedding(nn.Cell):
         super().__init__()
         from .normalization import LayerNorm
 
-        self.image_proj = nn.Dense(image_embed_dim, time_embed_dim)
+        self.image_proj = Linear(image_embed_dim, time_embed_dim)
         self.image_norm = LayerNorm(time_embed_dim)
         self.input_hint_block = nn.SequentialCell(
             nn.Conv2d(3, 16, 3, pad_mode="pad", padding=1, has_bias=True),
@@ -655,9 +656,9 @@ class AttentionPooling(nn.Cell):
         self.positional_embedding = ms.Parameter(
             ops.randn(1, embed_dim) / embed_dim**0.5, name="positional_embedding"
         )
-        self.k_proj = nn.Dense(embed_dim, embed_dim, dtype=self.dtype)
-        self.q_proj = nn.Dense(embed_dim, embed_dim, dtype=self.dtype)
-        self.v_proj = nn.Dense(embed_dim, embed_dim, dtype=self.dtype)
+        self.k_proj = Linear(embed_dim, embed_dim, dtype=self.dtype)
+        self.q_proj = Linear(embed_dim, embed_dim, dtype=self.dtype)
+        self.v_proj = Linear(embed_dim, embed_dim, dtype=self.dtype)
         self.num_heads = num_heads
         self.dim_per_head = embed_dim // self.num_heads
 
@@ -733,28 +734,28 @@ class GLIGENTextBoundingboxProjection(nn.Cell):
 
         if feature_type == "text-only":
             self.linears = nn.SequentialCell(
-                nn.Dense(self.positive_len + self.position_dim, 512),
+                Linear(self.positive_len + self.position_dim, 512),
                 nn.SiLU(),
-                nn.Dense(512, 512),
+                Linear(512, 512),
                 nn.SiLU(),
-                nn.Dense(512, out_dim),
+                Linear(512, out_dim),
             )
             self.null_positive_feature = ms.Parameter(ops.zeros([self.positive_len]), name="null_positive_feature")
 
         elif feature_type == "text-image":
             self.linears_text = nn.SequentialCell(
-                nn.Dense(self.positive_len + self.position_dim, 512),
+                Linear(self.positive_len + self.position_dim, 512),
                 nn.SiLU(),
-                nn.Dense(512, 512),
+                Linear(512, 512),
                 nn.SiLU(),
-                nn.Dense(512, out_dim),
+                Linear(512, out_dim),
             )
             self.linears_image = nn.SequentialCell(
-                nn.Dense(self.positive_len + self.position_dim, 512),
+                Linear(self.positive_len + self.position_dim, 512),
                 nn.SiLU(),
-                nn.Dense(512, 512),
+                Linear(512, 512),
                 nn.SiLU(),
-                nn.Dense(512, out_dim),
+                Linear(512, out_dim),
             )
             self.null_text_feature = ms.Parameter(ops.zeros([self.positive_len]), name="null_text_feature")
             self.null_image_feature = ms.Parameter(ops.zeros([self.positive_len]), name="null_image_feature")
@@ -859,7 +860,7 @@ class PixArtAlphaTextProjection(nn.Cell):
         super().__init__()
         if out_features is None:
             out_features = hidden_size
-        self.linear_1 = nn.Dense(in_channels=in_features, out_channels=hidden_size, has_bias=True)
+        self.linear_1 = Linear(in_features, hidden_size, bias=True)
         if act_fn == "gelu_tanh":
             self.act_1 = nn.GELU(approximate=True)
         elif act_fn == "silu":
@@ -868,7 +869,7 @@ class PixArtAlphaTextProjection(nn.Cell):
             self.act_1 = FP32SiLU()
         else:
             raise ValueError(f"Unknown activation function: {act_fn}")
-        self.linear_2 = nn.Dense(in_channels=hidden_size, out_channels=hidden_size, has_bias=True)
+        self.linear_2 = Linear(hidden_size, hidden_size, bias=True)
 
     def construct(self, caption):
         hidden_states = self.linear_1(caption)
@@ -912,9 +913,9 @@ class IPAdapterPlusImageProjection(nn.Cell):
 
         self.latents = ms.Parameter(ops.randn(1, num_queries, hidden_dims) / hidden_dims**0.5, name="latents")
 
-        self.proj_in = nn.Dense(embed_dims, hidden_dims)
+        self.proj_in = Linear(embed_dims, hidden_dims)
 
-        self.proj_out = nn.Dense(hidden_dims, output_dims)
+        self.proj_out = Linear(hidden_dims, output_dims)
         self.norm_out = LayerNorm(output_dims)
 
         layers = []

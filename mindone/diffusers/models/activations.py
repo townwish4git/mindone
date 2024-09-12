@@ -15,6 +15,8 @@
 import mindspore as ms
 from mindspore import nn, ops
 
+from .layers_compat import Linear
+
 
 def sigmoid(x):
     """A numerically stable version of the logistic sigmoid function."""
@@ -81,7 +83,7 @@ class GELU(nn.Cell):
 
     def __init__(self, dim_in: int, dim_out: int, approximate: str = "none", bias: bool = True):
         super().__init__()
-        self.proj = nn.Dense(dim_in, dim_out, has_bias=bias)
+        self.proj = Linear(dim_in, dim_out, bias=bias)
         self.approximate = approximate
 
     def gelu(self, gate: ms.Tensor) -> ms.Tensor:
@@ -105,7 +107,7 @@ class GEGLU(nn.Cell):
 
     def __init__(self, dim_in: int, dim_out: int, bias: bool = True):
         super().__init__()
-        self.proj = nn.Dense(dim_in, dim_out * 2, has_bias=bias)
+        self.proj = Linear(dim_in, dim_out * 2, bias=bias)
 
     def gelu(self, gate: ms.Tensor) -> ms.Tensor:
         return ops.gelu(gate)
@@ -128,7 +130,7 @@ class ApproximateGELU(nn.Cell):
 
     def __init__(self, dim_in: int, dim_out: int, bias: bool = True):
         super().__init__()
-        self.proj = nn.Dense(dim_in, dim_out, has_bias=bias)
+        self.proj = Linear(dim_in, dim_out, bias=bias)
 
     def construct(self, x: ms.Tensor) -> ms.Tensor:
         x = self.proj(x)

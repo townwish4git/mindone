@@ -26,6 +26,7 @@ from ...models.modeling_utils import ModelMixin
 from ...models.normalization import AdaLayerNormContinuous
 from ...utils import logging
 from ..embeddings import CombinedTimestepTextProjEmbeddings, PatchEmbed
+from ..layers_compat import Linear
 from .transformer_2d import Transformer2DModelOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -85,7 +86,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin):
         self.time_text_embed = CombinedTimestepTextProjEmbeddings(
             embedding_dim=self.inner_dim, pooled_projection_dim=self.config.pooled_projection_dim
         )
-        self.context_embedder = nn.Dense(self.config.joint_attention_dim, self.config.caption_projection_dim)
+        self.context_embedder = Linear(self.config.joint_attention_dim, self.config.caption_projection_dim)
 
         # `attention_head_dim` is doubled to account for the mixing.
         # It needs to crafted when we get the actual checkpoints.
@@ -102,7 +103,7 @@ class SD3Transformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin):
         )
 
         self.norm_out = AdaLayerNormContinuous(self.inner_dim, self.inner_dim, elementwise_affine=False, eps=1e-6)
-        self.proj_out = nn.Dense(self.inner_dim, patch_size * patch_size * self.out_channels, has_bias=True)
+        self.proj_out = Linear(self.inner_dim, patch_size * patch_size * self.out_channels, bias=True)
 
         self._gradient_checkpointing = False
 
