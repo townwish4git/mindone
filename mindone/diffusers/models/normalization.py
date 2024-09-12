@@ -47,7 +47,7 @@ class AdaLayerNorm(nn.Cell):
         # because inputs tensor of nn.Dense should has more than 1 dim.
         emb = self.linear(self.silu(self.emb(timestep[None])))
         scale, shift = ops.chunk(emb, 2, axis=1)
-        x = self.norm(x) * (1 + scale[:, None]) + shift[:, None]
+        x = self.norm(x) * (1 + scale.expand_dims(1)) + shift.expand_dims(1)
         return x
 
 
@@ -83,7 +83,7 @@ class AdaLayerNormZero(nn.Cell):
             emb = self.emb(timestep, class_labels, hidden_dtype=hidden_dtype)
         emb = self.linear(self.silu(emb))
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
-        x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
+        x = self.norm(x) * (1 + scale_msa.expand_dims(1)) + shift_msa.expand_dims(1)
         return x, gate_msa, shift_mlp, scale_mlp, gate_mlp
 
 
@@ -150,7 +150,7 @@ class AdaGroupNorm(nn.Cell):
         if self.act:
             emb = self.act(emb)
         emb = self.linear(emb)
-        emb = emb[:, :, None, None]
+        emb = emb.expand_dims(2).expand_dims(2)
         scale, shift = emb.chunk(2, axis=1)
 
         x = group_norm(x, self.num_groups, None, None, self.eps)
@@ -186,7 +186,7 @@ class AdaLayerNormContinuous(nn.Cell):
     def construct(self, x: ms.Tensor, conditioning_embedding: ms.Tensor) -> ms.Tensor:
         emb = self.linear(self.silu(conditioning_embedding))
         scale, shift = ops.chunk(emb, 2, axis=1)
-        x = self.norm(x) * (1 + scale)[:, None, :] + shift[:, None, :]
+        x = self.norm(x) * (1 + scale).expand_dims(1) + shift.expand_dims(1)
         return x
 
 

@@ -17,7 +17,7 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 
 import mindspore as ms
-from mindspore import nn, ops
+from mindspore import mint, nn, ops
 
 from .activations import FP32SiLU, get_activation
 from .attention_processor import Attention
@@ -47,7 +47,7 @@ def get_timestep_embedding(
     exponent = exponent / (half_dim - downscale_freq_shift)
 
     emb = ops.exp(exponent)
-    emb = timesteps[:, None].float() * emb[None, :]
+    emb = timesteps.expand_dims(1).float() * emb.expand_dims(0)
 
     # scale embeddings
     emb = scale * emb
@@ -57,7 +57,8 @@ def get_timestep_embedding(
 
     # flip sine and cosine embeddings
     if flip_sin_to_cos:
-        emb = ops.cat([emb[:, half_dim:], emb[:, :half_dim]], axis=-1)
+        sin, cos = mint.split(emb, half_dim, dim=1)
+        emb = ops.cat((cos, sin), axis=-1)
 
     # zero pad
     if embedding_dim % 2 == 1:
