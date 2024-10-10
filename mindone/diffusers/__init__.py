@@ -1,4 +1,4 @@
-__version__ = "0.29.2"
+__version__ = "0.30.3"
 
 from typing import TYPE_CHECKING
 
@@ -153,6 +153,8 @@ _import_structure = {
     "schedulers": [
         "ConsistencyDecoderScheduler",
         "CMStochasticIterativeScheduler",
+        "CogVideoXDDIMScheduler",
+        "CogVideoXDPMScheduler",
         "DDIMScheduler",
         "DDIMInverseScheduler",
         "DDIMParallelScheduler",
@@ -167,6 +169,7 @@ _import_structure = {
         "EulerAncestralDiscreteScheduler",
         "EulerDiscreteScheduler",
         "FlowMatchEulerDiscreteScheduler",
+        "FlowMatchHeunDiscreteScheduler",
         "HeunDiscreteScheduler",
         "IPNDMScheduler",
         "KDPM2AncestralDiscreteScheduler",
@@ -326,6 +329,8 @@ if TYPE_CHECKING:
     )
     from .schedulers import (
         CMStochasticIterativeScheduler,
+        CogVideoXDDIMScheduler,
+        CogVideoXDPMScheduler,
         ConsistencyDecoderScheduler,
         DDIMInverseScheduler,
         DDIMParallelScheduler,
@@ -342,6 +347,7 @@ if TYPE_CHECKING:
         EulerAncestralDiscreteScheduler,
         EulerDiscreteScheduler,
         FlowMatchEulerDiscreteScheduler,
+        FlowMatchHeunDiscreteScheduler,
         HeunDiscreteScheduler,
         IPNDMScheduler,
         KDPM2AncestralDiscreteScheduler,
