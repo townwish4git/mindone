@@ -968,6 +968,14 @@ class MotionModules(nn.Cell):
         super().__init__()
         self.motion_modules = []
 
+        if isinstance(transformer_layers_per_block, int):
+            transformer_layers_per_block = (transformer_layers_per_block,) * layers_per_block
+        elif len(transformer_layers_per_block) != layers_per_block:
+            raise ValueError(
+                f"The number of transformer layers per block must match the number of layers per block, "
+                f"got {layers_per_block} and {len(transformer_layers_per_block)}"
+            )
+
         for i in range(layers_per_block):
             self.motion_modules.append(
                 AnimateDiffTransformer3D(
