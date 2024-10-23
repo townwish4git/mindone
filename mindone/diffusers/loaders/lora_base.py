@@ -587,7 +587,7 @@ class LoraBaseMixin:
         for component in self._lora_loadable_modules:
             model = getattr(self, component, None)
             if model is not None and issubclass(model.__class__, ModelMixin):
-                for module in model.modules():
+                for _, module in model.cells_and_names():
                     if isinstance(module, BaseTunerLayer):
                         active_adapters = module.active_adapters
                         break
