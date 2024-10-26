@@ -168,6 +168,9 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin):
             if hasattr(self, "transformer") and self.transformer is not None
             else 128
         )
+        self.patch_size = (
+            self.transformer.config.patch_size if hasattr(self, "transformer") and self.transformer is not None else 2
+        )
 
     def _get_t5_prompt_embeds(
         self,
@@ -371,7 +374,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin):
                 max_sequence_length=max_sequence_length,
             )
 
-            clip_prompt_embeds = ops.pad(
+            clip_prompt_embeds = ms.mint.functional.pad(
                 clip_prompt_embeds, (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1])
             )
 
@@ -424,7 +427,7 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin):
                 max_sequence_length=max_sequence_length,
             )
 
-            negative_clip_prompt_embeds = ops.pad(
+            negative_clip_prompt_embeds = ms.mint.functional.pad(
                 negative_clip_prompt_embeds,
                 (0, t5_negative_prompt_embed.shape[-1] - negative_clip_prompt_embeds.shape[-1]),
             )
@@ -453,8 +456,14 @@ class StableDiffusion3Pipeline(DiffusionPipeline, SD3LoraLoaderMixin):
         callback_on_step_end_tensor_inputs=None,
         max_sequence_length=None,
     ):
-        if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
+        if (
+            height % (self.vae_scale_factor * self.patch_size) != 0
+            or width % (self.vae_scale_factor * self.patch_size) != 0
+        ):
+            raise ValueError(
+                f"`height` and `width` have to be divisible by {self.vae_scale_factor * self.patch_size} but are {height} and {width}."
+                f"You can use height {height - height % (self.vae_scale_factor * self.patch_size)} and width {width - width % (self.vae_scale_factor * self.patch_size)}."
+            )
 
         if callback_on_step_end_tensor_inputs is not None and not all(
             k in self._callback_tensor_inputs for k in callback_on_step_end_tensor_inputs
