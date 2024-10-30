@@ -22,13 +22,13 @@ from opensora.utils.ms_utils import init_env
 from opensora.utils.utils import get_precision
 from transformers import AutoTokenizer
 
-from mindone.transformers import MT5EncoderModel
+from townwish_mindone_testing.transformers import MT5EncoderModel
 
 # from mindone.transformers.activations import NewGELUActivation
 # from mindone.transformers.models.mt5.modeling_mt5 import MT5LayerNorm
 # from mindone.utils.amp import auto_mixed_precision
-from mindone.utils.config import str2bool
-from mindone.utils.logger import set_logger
+from townwish_mindone_testing.utils.config import str2bool
+from townwish_mindone_testing.utils.logger import set_logger
 
 logger = logging.getLogger(__name__)
 

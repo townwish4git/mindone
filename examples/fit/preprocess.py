@@ -22,7 +22,7 @@ from utils.model_utils import check_cfgs_in_parser, str2bool
 
 import mindspore as ms
 
-from mindone.utils.logger import set_logger
+from townwish_mindone_testing.utils.logger import set_logger
 
 logger = logging.getLogger(__name__)
 

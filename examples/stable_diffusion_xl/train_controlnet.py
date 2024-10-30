@@ -28,7 +28,7 @@ from omegaconf import OmegaConf
 import mindspore as ms
 from mindspore import Tensor, nn
 
-from mindone.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
 
 
 def count_params(model, verbose=False):

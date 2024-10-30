@@ -10,9 +10,9 @@ from mindspore import ops
 # TODO: remove in future when mindone is ready for install
 mindone_lib_path = os.path.abspath("../../")
 sys.path.insert(0, mindone_lib_path)
-from mindone.transformers import MT5EncoderModel
-from mindone.transformers.models.mt5.modeling_mt5 import MT5LayerNorm
-from mindone.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.transformers import MT5EncoderModel
+from townwish_mindone_testing.transformers.models.mt5.modeling_mt5 import MT5LayerNorm
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
 
 
 def load_text_encoder(

@@ -36,11 +36,11 @@ from pixart.utils import (
 )
 from transformers import AutoTokenizer
 
-from mindone.trainers.optim import create_optimizer
-from mindone.trainers.train_step import TrainOneStepWrapper
-from mindone.transformers import T5EncoderModel
-from mindone.utils.amp import auto_mixed_precision
-from mindone.utils.logger import set_logger
+from townwish_mindone_testing.trainers.optim import create_optimizer
+from townwish_mindone_testing.trainers.train_step import TrainOneStepWrapper
+from townwish_mindone_testing.transformers import T5EncoderModel
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.logger import set_logger
 
 logger = logging.getLogger(__name__)
 

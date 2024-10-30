@@ -14,8 +14,8 @@ import mindspore as ms
 from mindspore import Tensor, nn, ops
 from mindspore.common.initializer import HeUniform, Zero, initializer
 
-from mindone.diffusers import AutoencoderKL
-from mindone.transformers import CLIPTextModel
+from townwish_mindone_testing.diffusers import AutoencoderKL
+from townwish_mindone_testing.transformers import CLIPTextModel
 
 setup_logging()
 import logging

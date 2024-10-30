@@ -12,10 +12,10 @@ from mindspore import nn
 mindone_lib_path = os.path.abspath("../../")
 sys.path.insert(0, mindone_lib_path)
 
-from mindone.utils.amp import auto_mixed_precision
-from mindone.utils.config import str2bool
-from mindone.utils.logger import set_logger
-from mindone.visualize.videos import save_videos
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.config import str2bool
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.visualize.videos import save_videos
 
 sys.path.append(".")
 from opensora.acceleration.parallel_states import get_sequence_parallel_state, hccl_info

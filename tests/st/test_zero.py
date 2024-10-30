@@ -7,9 +7,9 @@ from mindspore import nn
 from mindspore.communication import get_group_size, get_rank, init
 from mindspore.communication.management import GlobalComm
 
-from mindone.trainers.ema import EMA
-from mindone.trainers.zero import prepare_train_network
-from mindone.utils.logger import set_logger
+from townwish_mindone_testing.trainers.ema import EMA
+from townwish_mindone_testing.trainers.zero import prepare_train_network
+from townwish_mindone_testing.utils.logger import set_logger
 
 _logger = logging.getLogger(__name__)
 

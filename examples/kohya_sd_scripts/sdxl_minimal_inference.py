@@ -17,7 +17,7 @@ from transformers import CLIPTokenizer
 import mindspore as ms
 from mindspore import ops
 
-from mindone.diffusers import EulerDiscreteScheduler
+from townwish_mindone_testing.diffusers import EulerDiscreteScheduler
 
 setup_logging()
 import logging

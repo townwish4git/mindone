@@ -37,10 +37,15 @@ from mindspore import Tensor, nn, ops
 from mindspore.amp import StaticLossScaler
 from mindspore.dataset import GeneratorDataset, transforms, vision
 
-from mindone.diffusers import AutoencoderKL, DDPMScheduler, StableDiffusionXLPipeline, UNet2DConditionModel
-from mindone.diffusers.models.layers_compat import multinomial
-from mindone.diffusers.optimization import get_scheduler
-from mindone.diffusers.training_utils import (
+from townwish_mindone_testing.diffusers import (
+    AutoencoderKL,
+    DDPMScheduler,
+    StableDiffusionXLPipeline,
+    UNet2DConditionModel,
+)
+from townwish_mindone_testing.diffusers.models.layers_compat import multinomial
+from townwish_mindone_testing.diffusers.optimization import get_scheduler
+from townwish_mindone_testing.diffusers.training_utils import (
     AttrJitWrapper,
     TrainStep,
     compute_snr,
@@ -67,11 +72,11 @@ def import_model_class_from_model_name_or_path(
     model_class = text_encoder_config.architectures[0]
 
     if model_class == "CLIPTextModel":
-        from mindone.transformers import CLIPTextModel
+        from townwish_mindone_testing.transformers import CLIPTextModel
 
         return CLIPTextModel
     elif model_class == "CLIPTextModelWithProjection":
-        from mindone.transformers import CLIPTextModelWithProjection
+        from townwish_mindone_testing.transformers import CLIPTextModelWithProjection
 
         return CLIPTextModelWithProjection
     else:

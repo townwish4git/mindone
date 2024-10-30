@@ -34,18 +34,24 @@ from mindspore import nn, ops
 from mindspore.amp import StaticLossScaler
 from mindspore.dataset import GeneratorDataset, vision
 
-from mindone.diffusers import (
+from townwish_mindone_testing.diffusers import (
     AutoencoderKL,
     DDPMScheduler,
     DiffusionPipeline,
     DPMSolverMultistepScheduler,
     UNet2DConditionModel,
 )
-from mindone.diffusers.optimization import get_scheduler
-from mindone.diffusers.training_utils import AttrJitWrapper, TrainStep, init_distributed_device, is_master, set_seed
-from mindone.diffusers.utils import PIL_INTERPOLATION
-from mindone.safetensors.mindspore import save_file as safe_save_file
-from mindone.transformers import CLIPTextModel
+from townwish_mindone_testing.diffusers.optimization import get_scheduler
+from townwish_mindone_testing.diffusers.training_utils import (
+    AttrJitWrapper,
+    TrainStep,
+    init_distributed_device,
+    is_master,
+    set_seed,
+)
+from townwish_mindone_testing.diffusers.utils import PIL_INTERPOLATION
+from townwish_mindone_testing.safetensors.mindspore import save_file as safe_save_file
+from townwish_mindone_testing.transformers import CLIPTextModel
 
 logger = logging.getLogger(__name__)
 
@@ -700,7 +706,7 @@ def main():
     text_encoder.get_input_embeddings().to_float(weight_dtype)
     # In `StableDiffusionPipeline.encode_prompt`, `prompt_embeds` is cast according to `text_encoder.dtype`
     # This unsafe and ugly patch affects all instances of `MSPreTrainedModel`. Improve it in the future!
-    from mindone.transformers import MSPreTrainedModel
+    from townwish_mindone_testing.transformers import MSPreTrainedModel
 
     MSPreTrainedModel.dtype = weight_dtype
 

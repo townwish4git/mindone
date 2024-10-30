@@ -30,7 +30,7 @@ from typing import Optional
 import mindspore as ms
 from mindspore import Tensor, nn, ops
 
-from mindone.models.modules.flash_attention import MSFlashAttention
+from townwish_mindone_testing.models.modules.flash_attention import MSFlashAttention
 
 logger = logging.getLogger(__name__)
 

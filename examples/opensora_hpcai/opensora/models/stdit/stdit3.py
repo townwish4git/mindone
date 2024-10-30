@@ -37,7 +37,7 @@ import mindspore as ms
 from mindspore import Parameter, Tensor, load_checkpoint, load_param_into_net, mint, nn, ops
 from mindspore.communication import get_group_size
 
-from mindone.models.utils import constant_, normal_, xavier_uniform_
+from townwish_mindone_testing.models.utils import constant_, normal_, xavier_uniform_
 
 logger = logging.getLogger(__name__)
 

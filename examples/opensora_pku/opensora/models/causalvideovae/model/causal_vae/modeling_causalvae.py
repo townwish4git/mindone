@@ -7,9 +7,14 @@ from opensora.acceleration.parallel_states import get_sequence_parallel_state
 import mindspore as ms
 from mindspore import nn, ops
 
-from mindone.diffusers import __version__
-from mindone.diffusers.models.modeling_utils import load_state_dict
-from mindone.diffusers.utils import SAFETENSORS_WEIGHTS_NAME, WEIGHTS_NAME, _add_variant, _get_model_file
+from townwish_mindone_testing.diffusers import __version__
+from townwish_mindone_testing.diffusers.models.modeling_utils import load_state_dict
+from townwish_mindone_testing.diffusers.utils import (
+    SAFETENSORS_WEIGHTS_NAME,
+    WEIGHTS_NAME,
+    _add_variant,
+    _get_model_file,
+)
 
 from ..modeling_videobase import VideoBaseAE
 from ..modules.conv import CausalConv3d

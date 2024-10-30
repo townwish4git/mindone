@@ -11,7 +11,7 @@ import mindspore.ops as ops
 from mindspore import Parameter, ParameterTuple, RunContext, Tensor
 from mindspore.train import Callback
 
-from mindone.trainers.checkpoint import CheckpointManager
+from townwish_mindone_testing.trainers.checkpoint import CheckpointManager
 
 from .misc import organize_prompts
 from .plot import create_save_func

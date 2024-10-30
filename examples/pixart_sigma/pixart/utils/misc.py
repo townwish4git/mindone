@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Tuple
 import mindspore as ms
 from mindspore.communication import get_group_size, get_rank, init
 
-from mindone.utils.seed import set_random_seed
+from townwish_mindone_testing.utils.seed import set_random_seed
 
 __all__ = ["str2bool", "check_cfgs_in_parser", "init_env", "organize_prompts"]
 

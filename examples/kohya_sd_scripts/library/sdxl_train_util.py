@@ -60,7 +60,7 @@ def _load_target_model(name_or_path: str, vae_path: Optional[str], model_version
         ) = sdxl_model_util.load_models_from_sdxl_checkpoint(model_version, name_or_path, model_dtype)
     else:
         # Diffusers model is loaded to CPU
-        from mindone.diffusers import StableDiffusionXLPipeline
+        from townwish_mindone_testing.diffusers import StableDiffusionXLPipeline
 
         variant = "fp16" if weight_dtype == ms.float16 else None
         logger.info(f"load Diffusers pretrained models: {name_or_path}, variant={variant}")

@@ -3,8 +3,8 @@ import os
 
 import mindspore as ms
 
-from mindone.utils.config import instantiate_from_config
-from mindone.utils.params import load_param_into_net_with_filter
+from townwish_mindone_testing.utils.config import instantiate_from_config
+from townwish_mindone_testing.utils.params import load_param_into_net_with_filter
 
 logger = logging.getLogger()
 

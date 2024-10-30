@@ -11,8 +11,11 @@ from mindspore import Parameter, Tensor, mint, nn, ops
 from mindspore.common.initializer import initializer
 from mindspore.communication import get_group_size
 
-from mindone.models.modules.flash_attention import FLASH_IS_AVAILABLE, MSFlashAttention
-from mindone.models.modules.pos_embed import _get_1d_sincos_pos_embed_from_grid, _get_2d_sincos_pos_embed_from_grid
+from townwish_mindone_testing.models.modules.flash_attention import FLASH_IS_AVAILABLE, MSFlashAttention
+from townwish_mindone_testing.models.modules.pos_embed import (
+    _get_1d_sincos_pos_embed_from_grid,
+    _get_2d_sincos_pos_embed_from_grid,
+)
 
 from .operation_selector import get_chunk_op, get_repeat_interleave_op, get_split_op
 from .rotary_embedding import rope_1d

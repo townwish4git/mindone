@@ -6,7 +6,7 @@ from typing import Union
 
 import mindspore as ms
 
-from mindone.utils.params import load_param_into_net_with_filter
+from townwish_mindone_testing.utils.params import load_param_into_net_with_filter
 
 _logger = logging.getLogger(__name__)
 

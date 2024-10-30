@@ -13,7 +13,7 @@ sys.path.insert(0, mindone_lib_path)
 sys.path.append("./")
 from opensora.models.stdit.stdit import STDiT_XL_2  # , STDiTBlock
 
-from mindone.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
 
 """
 x (torch.Tensor): latent representation of video; of shape [B, C, T, H, W]

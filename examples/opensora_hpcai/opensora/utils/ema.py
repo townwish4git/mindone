@@ -1,7 +1,7 @@
 from mindspore.ops import composite as C
 from mindspore.ops import functional as F
 
-from mindone.trainers.ema import EMA as EMA_
+from townwish_mindone_testing.trainers.ema import EMA as EMA_
 
 _ema_op = C.MultitypeFuncGraph("grad_ema_op")
 

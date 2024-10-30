@@ -6,7 +6,7 @@ from opensora.acceleration.parallel_states import get_sequence_parallel_state, h
 import mindspore as ms
 from mindspore import nn, ops
 
-from mindone.diffusers.training_utils import compute_snr
+from townwish_mindone_testing.diffusers.training_utils import compute_snr
 
 __all__ = ["DiffusionWithLoss"]
 

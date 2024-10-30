@@ -30,23 +30,23 @@ from opensora.utils.ms_utils import init_env
 from opensora.utils.utils import _check_cfgs_in_parser, get_precision
 from transformers import AutoTokenizer
 
-from mindone.diffusers.models.embeddings import PixArtAlphaCombinedTimestepSizeEmbeddings
-from mindone.diffusers.schedulers import (
+from townwish_mindone_testing.diffusers.models.embeddings import PixArtAlphaCombinedTimestepSizeEmbeddings
+from townwish_mindone_testing.diffusers.schedulers import (
     DDIMScheduler,
     DDPMScheduler,
     EulerAncestralDiscreteScheduler,
     EulerDiscreteScheduler,
     PNDMScheduler,
 )
-from mindone.transformers import MT5EncoderModel
+from townwish_mindone_testing.transformers import MT5EncoderModel
 
 # from mindone.transformers.activations import NewGELUActivation
 # from mindone.transformers.models.mt5.modeling_mt5 import MT5LayerNorm
-from mindone.utils.amp import auto_mixed_precision
-from mindone.utils.config import str2bool
-from mindone.utils.logger import set_logger
-from mindone.utils.params import count_params
-from mindone.visualize.videos import save_videos
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.config import str2bool
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.params import count_params
+from townwish_mindone_testing.visualize.videos import save_videos
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ import mindspore.nn as nn
 import mindspore.ops as ops
 from mindspore.communication import get_group_size, init
 
-from mindone.utils.seed import set_random_seed
+from townwish_mindone_testing.utils.seed import set_random_seed
 
 
 class MeanNet(nn.Cell):

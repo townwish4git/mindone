@@ -16,9 +16,14 @@ from mindspore import nn, ops
 from mindspore.amp import StaticLossScaler
 from mindspore.dataset import GeneratorDataset, transforms, vision
 
-from mindone.diffusers import DDPMPipeline, DDPMScheduler, UNet2DModel
-from mindone.diffusers.optimization import get_scheduler
-from mindone.diffusers.training_utils import AttrJitWrapper, TrainStep, init_distributed_device, is_master
+from townwish_mindone_testing.diffusers import DDPMPipeline, DDPMScheduler, UNet2DModel
+from townwish_mindone_testing.diffusers.optimization import get_scheduler
+from townwish_mindone_testing.diffusers.training_utils import (
+    AttrJitWrapper,
+    TrainStep,
+    init_distributed_device,
+    is_master,
+)
 
 logger = logging.getLogger(__name__)
 

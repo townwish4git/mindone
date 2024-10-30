@@ -12,8 +12,8 @@ from opensora.acceleration.parallel_states import get_sequence_parallel_state, h
 import mindspore as ms
 from mindspore import mint, ops
 
-from mindone.diffusers.pipelines.pipeline_utils import DiffusionPipeline, ImagePipelineOutput
-from mindone.diffusers.utils import BACKENDS_MAPPING, deprecate, is_bs4_available, is_ftfy_available
+from townwish_mindone_testing.diffusers.pipelines.pipeline_utils import DiffusionPipeline, ImagePipelineOutput
+from townwish_mindone_testing.diffusers.utils import BACKENDS_MAPPING, deprecate, is_bs4_available, is_ftfy_available
 
 logger = logging.getLogger(__name__)
 

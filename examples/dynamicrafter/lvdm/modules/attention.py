@@ -7,8 +7,8 @@ import mindspore as ms
 from mindspore import nn, ops
 from mindspore.common.initializer import XavierUniform, initializer
 
-from mindone.models.modules.flash_attention import FLASH_IS_AVAILABLE, MSFlashAttention
-from mindone.utils.version_control import is_old_ms_version
+from townwish_mindone_testing.models.modules.flash_attention import FLASH_IS_AVAILABLE, MSFlashAttention
+from townwish_mindone_testing.utils.version_control import is_old_ms_version
 
 logger = logging.getLogger()
 

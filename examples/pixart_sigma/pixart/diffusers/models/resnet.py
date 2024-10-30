@@ -4,7 +4,7 @@ from typing import Optional
 import mindspore as ms
 import mindspore.nn as nn
 
-from mindone.diffusers.models.resnet import ResnetBlock2D as ResnetBlock2D_
+from townwish_mindone_testing.diffusers.models.resnet import ResnetBlock2D as ResnetBlock2D_
 
 
 class ResnetBlock2D(ResnetBlock2D_):

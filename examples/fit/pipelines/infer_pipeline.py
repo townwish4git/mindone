@@ -6,7 +6,7 @@ from diffusion import create_diffusion
 import mindspore as ms
 from mindspore import Tensor, nn, ops
 
-from mindone.models.modules import get_2d_sincos_pos_embed, precompute_freqs_cis_2d
+from townwish_mindone_testing.models.modules import get_2d_sincos_pos_embed, precompute_freqs_cis_2d
 
 
 class FiTInferPipeline:

@@ -29,7 +29,7 @@ import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as ops
 
-from mindone.utils.version_control import is_old_ms_version
+from townwish_mindone_testing.utils.version_control import is_old_ms_version
 
 _logger = logging.getLogger(__name__)
 

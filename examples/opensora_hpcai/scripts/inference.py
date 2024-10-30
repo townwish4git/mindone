@@ -29,11 +29,11 @@ from opensora.utils.cond_data import get_references, read_captions_from_csv, rea
 from opensora.utils.model_utils import WHITELIST_OPS, _check_cfgs_in_parser, str2bool
 from opensora.utils.util import IMG_FPS, apply_mask_strategy, process_mask_strategies, process_prompts
 
-from mindone.data.data_split import distribute_samples
-from mindone.utils.logger import set_logger
-from mindone.utils.misc import to_abspath
-from mindone.utils.seed import set_random_seed
-from mindone.visualize.videos import save_videos
+from townwish_mindone_testing.data.data_split import distribute_samples
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.misc import to_abspath
+from townwish_mindone_testing.utils.seed import set_random_seed
+from townwish_mindone_testing.visualize.videos import save_videos
 
 logger = logging.getLogger(__name__)
 

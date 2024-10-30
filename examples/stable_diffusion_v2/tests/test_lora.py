@@ -12,7 +12,7 @@ sys.path.append("../../")
 import mindspore as ms
 from mindspore import ops
 
-from mindone.models.lora import LoRADenseLayer, inject_trainable_lora, merge_lora_to_model_weights
+from townwish_mindone_testing.models.lora import LoRADenseLayer, inject_trainable_lora, merge_lora_to_model_weights
 
 set_random_seed(42)
 

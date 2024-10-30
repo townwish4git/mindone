@@ -30,8 +30,8 @@ mindone_lib_path = os.path.abspath(os.path.join(__dir__, "../../../"))
 sys.path.insert(0, mindone_lib_path)
 
 # load training modules
-from mindone.utils.logger import set_logger
-from mindone.utils.seed import set_random_seed
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.seed import set_random_seed
 
 os.environ["HCCL_CONNECT_TIMEOUT"] = "6000"
 

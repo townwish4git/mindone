@@ -38,7 +38,7 @@ from mindspore import nn, ops
 from mindspore.communication import get_group_size, get_local_rank, get_rank, init
 from mindspore.dataset import transforms, vision
 
-from mindone.diffusers import (
+from townwish_mindone_testing.diffusers import (
     DDIMScheduler,
     DDPMScheduler,
     DPMSolverMultistepScheduler,
@@ -51,8 +51,8 @@ from mindone.diffusers import (
     LMSDiscreteScheduler,
     PNDMScheduler,
 )
-from mindone.diffusers.optimization import TYPE_TO_SCHEDULER_FUNCTION, SchedulerType
-from mindone.transformers import CLIPTextModel, CLIPTextModelWithProjection
+from townwish_mindone_testing.diffusers.optimization import TYPE_TO_SCHEDULER_FUNCTION, SchedulerType
+from townwish_mindone_testing.transformers import CLIPTextModel, CLIPTextModelWithProjection
 
 setup_logging()
 

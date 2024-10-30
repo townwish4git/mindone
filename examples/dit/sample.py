@@ -22,10 +22,10 @@ sys.path.insert(0, mindone_lib_path)
 from modules.autoencoder import SD_CONFIG, AutoencoderKL
 
 from examples.dit.pipelines.infer_pipeline import DiTInferPipeline
-from mindone.models.dit import DiT_models
-from mindone.utils.amp import auto_mixed_precision
-from mindone.utils.logger import set_logger
-from mindone.utils.seed import set_random_seed
+from townwish_mindone_testing.models.dit import DiT_models
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.seed import set_random_seed
 
 logger = logging.getLogger(__name__)
 

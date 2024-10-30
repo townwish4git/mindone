@@ -9,7 +9,7 @@ import mindspore.ops as ops
 from mindspore import Parameter, Tensor
 from mindspore.common.initializer import XavierUniform, initializer
 
-from mindone.models.utils import constant_, normal_, xavier_uniform_
+from townwish_mindone_testing.models.utils import constant_, normal_, xavier_uniform_
 
 from ._layers import GELU, LayerNorm
 from .blocks import (

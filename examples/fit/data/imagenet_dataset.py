@@ -9,7 +9,7 @@ from PIL import Image
 import mindspore as ms
 from mindspore.dataset.transforms import Compose, vision
 
-from mindone.models.modules.pos_embed import get_2d_sincos_pos_embed, precompute_freqs_cis_2d
+from townwish_mindone_testing.models.modules.pos_embed import get_2d_sincos_pos_embed, precompute_freqs_cis_2d
 
 _logger = logging.getLogger()
 

@@ -37,17 +37,17 @@ from mindspore import nn, ops
 from mindspore.amp import StaticLossScaler
 from mindspore.dataset import GeneratorDataset, transforms, vision
 
-from mindone.diffusers import (
+from townwish_mindone_testing.diffusers import (
     AutoencoderKL,
     FlowMatchEulerDiscreteScheduler,
     SD3Transformer2DModel,
     StableDiffusion3Pipeline,
 )
-from mindone.diffusers._peft import LoraConfig
-from mindone.diffusers._peft.tuners.tuners_utils import BaseTunerLayer
-from mindone.diffusers._peft.utils import get_peft_model_state_dict, set_peft_model_state_dict
-from mindone.diffusers.optimization import get_scheduler
-from mindone.diffusers.training_utils import (
+from townwish_mindone_testing.diffusers._peft import LoraConfig
+from townwish_mindone_testing.diffusers._peft.tuners.tuners_utils import BaseTunerLayer
+from townwish_mindone_testing.diffusers._peft.utils import get_peft_model_state_dict, set_peft_model_state_dict
+from townwish_mindone_testing.diffusers.optimization import get_scheduler
+from townwish_mindone_testing.diffusers.training_utils import (
     AttrJitWrapper,
     TrainStep,
     cast_training_params,
@@ -55,7 +55,7 @@ from mindone.diffusers.training_utils import (
     is_master,
     set_seed,
 )
-from mindone.diffusers.utils import convert_unet_state_dict_to_peft
+from townwish_mindone_testing.diffusers.utils import convert_unet_state_dict_to_peft
 
 logger = logging.getLogger(__name__)
 
@@ -116,11 +116,11 @@ def import_model_class_from_model_name_or_path(
     )
     model_class = text_encoder_config.architectures[0]
     if model_class == "CLIPTextModelWithProjection":
-        from mindone.transformers import CLIPTextModelWithProjection
+        from townwish_mindone_testing.transformers import CLIPTextModelWithProjection
 
         return CLIPTextModelWithProjection
     elif model_class == "T5EncoderModel":
-        from mindone.transformers import T5EncoderModel
+        from townwish_mindone_testing.transformers import T5EncoderModel
 
         return T5EncoderModel
     else:

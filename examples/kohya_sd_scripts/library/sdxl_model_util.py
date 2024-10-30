@@ -10,8 +10,8 @@ from transformers import CLIPTextConfig
 import mindspore as ms
 from mindspore import Parameter, nn, ops
 
-from mindone.diffusers import AutoencoderKL
-from mindone.transformers import CLIPTextModel, CLIPTextModelWithProjection
+from townwish_mindone_testing.diffusers import AutoencoderKL
+from townwish_mindone_testing.transformers import CLIPTextModel, CLIPTextModelWithProjection
 
 logger = logging.getLogger(__name__)
 

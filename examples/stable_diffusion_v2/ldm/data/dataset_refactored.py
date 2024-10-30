@@ -8,7 +8,7 @@ from PIL import Image
 
 from mindspore.dataset.vision import CenterCrop, RandomCrop, RandomHorizontalFlip, Resize
 
-from mindone.data import BaseDataset
+from townwish_mindone_testing.data import BaseDataset
 
 _logger = logging.getLogger(__name__)
 

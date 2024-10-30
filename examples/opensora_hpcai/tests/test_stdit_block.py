@@ -13,7 +13,7 @@ sys.path.insert(0, mindone_lib_path)
 sys.path.append("./")
 from opensora.models.stdit.stdit import STDiTBlock
 
-from mindone.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
 
 use_mask = False
 

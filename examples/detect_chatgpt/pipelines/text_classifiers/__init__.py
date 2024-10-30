@@ -1,4 +1,4 @@
-from mindone.pipelines.text_classifiers.BertMPUSequenceClassificationPipeline import (
+from townwish_mindone_testing.pipelines.text_classifiers.BertMPUSequenceClassificationPipeline import (
     BertMPUSequenceClassificationPipeline,
 )
 

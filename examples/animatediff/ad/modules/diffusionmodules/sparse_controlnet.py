@@ -5,7 +5,7 @@ import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as ops
 
-from mindone.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
 
 from ..attention import SpatialTransformer
 from .motion_module import VanillaTemporalModule, get_motion_module

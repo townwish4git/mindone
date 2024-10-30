@@ -30,20 +30,20 @@ from ad.data.dataset import create_dataloader
 from ad.utils.load_models import load_motion_modules, update_unet2d_params_for_unet3d
 from args_train import parse_args
 
-from mindone.models.lora import inject_trainable_lora, make_only_lora_params_trainable
-from mindone.trainers.callback import EvalSaveCallback, OverflowMonitor, ProfilerCallback
-from mindone.trainers.checkpoint import resume_train_network
-from mindone.trainers.ema import EMA
-from mindone.trainers.lr_schedule import create_scheduler
-from mindone.trainers.optim import create_optimizer
-from mindone.trainers.train_step import TrainOneStepWrapper
+from townwish_mindone_testing.models.lora import inject_trainable_lora, make_only_lora_params_trainable
+from townwish_mindone_testing.trainers.callback import EvalSaveCallback, OverflowMonitor, ProfilerCallback
+from townwish_mindone_testing.trainers.checkpoint import resume_train_network
+from townwish_mindone_testing.trainers.ema import EMA
+from townwish_mindone_testing.trainers.lr_schedule import create_scheduler
+from townwish_mindone_testing.trainers.optim import create_optimizer
+from townwish_mindone_testing.trainers.train_step import TrainOneStepWrapper
 
 # from mindone.utils.amp import auto_mixed_precision
-from mindone.utils.config import get_obj_from_str
-from mindone.utils.logger import set_logger
-from mindone.utils.params import count_params, load_param_into_net_with_filter
-from mindone.utils.seed import set_random_seed
-from mindone.utils.version_control import is_old_ms_version
+from townwish_mindone_testing.utils.config import get_obj_from_str
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.params import count_params, load_param_into_net_with_filter
+from townwish_mindone_testing.utils.seed import set_random_seed
+from townwish_mindone_testing.utils.version_control import is_old_ms_version
 
 os.environ["HCCL_CONNECT_TIMEOUT"] = "6000"
 os.environ["MS_ASCEND_CHECK_OVERFLOW_MODE"] = "INFNAN_MODE"

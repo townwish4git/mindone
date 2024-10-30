@@ -24,8 +24,8 @@ from mindspore import Parameter, Tensor
 from mindspore import dtype as mstype
 from mindspore import nn, ops
 
-from mindone.utils.config import instantiate_from_config
-from mindone.utils.misc import default, exists, extract_into_tensor
+from townwish_mindone_testing.utils.config import instantiate_from_config
+from townwish_mindone_testing.utils.misc import default, exists, extract_into_tensor
 
 _logger = logging.getLogger(__name__)
 

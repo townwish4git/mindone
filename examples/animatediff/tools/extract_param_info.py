@@ -37,7 +37,7 @@ def extract_torch_mm(v="v2"):
 def extract_ms_sd_mm(v="v2", print_mm=True, print_sd=False):
     mindone_lib_path = os.path.abspath(os.path.join(__dir__, "../../../"))
     sys.path.insert(0, mindone_lib_path)
-    from mindone.utils.config import instantiate_from_config
+    from townwish_mindone_testing.utils.config import instantiate_from_config
 
     if v == "v1":
         model_config_path = "configs/stable_diffusion/v1-inference-mmv1.yaml"
@@ -142,7 +142,7 @@ def extract_ms_unet_mm():
 def extract_ms_sparsectrl_encoder(control_type="image"):
     mindone_lib_path = os.path.abspath(os.path.join(__dir__, "../../../"))
     sys.path.insert(0, mindone_lib_path)
-    from mindone.utils.config import instantiate_from_config
+    from townwish_mindone_testing.utils.config import instantiate_from_config
 
     if control_type == "image":
         sparse_control_unet_config = "configs/stable_diffusion/v3-inference-mmv2-image-condition.yaml"

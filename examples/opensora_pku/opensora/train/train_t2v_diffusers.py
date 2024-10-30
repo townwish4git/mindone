@@ -31,19 +31,24 @@ from opensora.utils.message_utils import print_banner
 from opensora.utils.ms_utils import init_env
 from opensora.utils.utils import get_precision
 
-from mindone.diffusers.models.activations import SiLU
-from mindone.diffusers.schedulers import DDPMScheduler as DDPMScheduler_diffusers
-from mindone.trainers.callback import EvalSaveCallback, OverflowMonitor, ProfilerCallbackEpoch, StopAtStepCallback
-from mindone.trainers.checkpoint import resume_train_network
-from mindone.trainers.lr_schedule import create_scheduler
-from mindone.trainers.optim import create_optimizer
-from mindone.trainers.train_step import TrainOneStepWrapper
-from mindone.trainers.zero import prepare_train_network
-from mindone.transformers import MT5EncoderModel
-from mindone.utils.amp import auto_mixed_precision
-from mindone.utils.config import str2bool
-from mindone.utils.logger import set_logger
-from mindone.utils.params import count_params
+from townwish_mindone_testing.diffusers.models.activations import SiLU
+from townwish_mindone_testing.diffusers.schedulers import DDPMScheduler as DDPMScheduler_diffusers
+from townwish_mindone_testing.trainers.callback import (
+    EvalSaveCallback,
+    OverflowMonitor,
+    ProfilerCallbackEpoch,
+    StopAtStepCallback,
+)
+from townwish_mindone_testing.trainers.checkpoint import resume_train_network
+from townwish_mindone_testing.trainers.lr_schedule import create_scheduler
+from townwish_mindone_testing.trainers.optim import create_optimizer
+from townwish_mindone_testing.trainers.train_step import TrainOneStepWrapper
+from townwish_mindone_testing.trainers.zero import prepare_train_network
+from townwish_mindone_testing.transformers import MT5EncoderModel
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.config import str2bool
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.params import count_params
 
 logger = logging.getLogger(__name__)
 

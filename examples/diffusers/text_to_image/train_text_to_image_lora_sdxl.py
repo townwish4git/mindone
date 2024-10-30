@@ -36,13 +36,18 @@ from mindspore import nn, ops
 from mindspore.amp import StaticLossScaler
 from mindspore.dataset import GeneratorDataset, transforms, vision
 
-from mindone.diffusers import AutoencoderKL, DDPMScheduler, StableDiffusionXLPipeline, UNet2DConditionModel
-from mindone.diffusers._peft import LoraConfig, set_peft_model_state_dict
-from mindone.diffusers._peft.tuners.tuners_utils import BaseTunerLayer
-from mindone.diffusers._peft.utils import get_peft_model_state_dict
-from mindone.diffusers.loaders import LoraLoaderMixin
-from mindone.diffusers.optimization import get_scheduler
-from mindone.diffusers.training_utils import (
+from townwish_mindone_testing.diffusers import (
+    AutoencoderKL,
+    DDPMScheduler,
+    StableDiffusionXLPipeline,
+    UNet2DConditionModel,
+)
+from townwish_mindone_testing.diffusers._peft import LoraConfig, set_peft_model_state_dict
+from townwish_mindone_testing.diffusers._peft.tuners.tuners_utils import BaseTunerLayer
+from townwish_mindone_testing.diffusers._peft.utils import get_peft_model_state_dict
+from townwish_mindone_testing.diffusers.loaders import LoraLoaderMixin
+from townwish_mindone_testing.diffusers.optimization import get_scheduler
+from townwish_mindone_testing.diffusers.training_utils import (
     AttrJitWrapper,
     TrainStep,
     _set_state_dict_into_text_encoder,
@@ -52,7 +57,7 @@ from mindone.diffusers.training_utils import (
     is_master,
     set_seed,
 )
-from mindone.diffusers.utils import convert_state_dict_to_diffusers, convert_unet_state_dict_to_peft
+from townwish_mindone_testing.diffusers.utils import convert_state_dict_to_diffusers, convert_unet_state_dict_to_peft
 
 logger = logging.getLogger(__name__)
 
@@ -76,11 +81,11 @@ def import_model_class_from_model_name_or_path(
     model_class = text_encoder_config.architectures[0]
 
     if model_class == "CLIPTextModel":
-        from mindone.transformers import CLIPTextModel
+        from townwish_mindone_testing.transformers import CLIPTextModel
 
         return CLIPTextModel
     elif model_class == "CLIPTextModelWithProjection":
-        from mindone.transformers import CLIPTextModelWithProjection
+        from townwish_mindone_testing.transformers import CLIPTextModelWithProjection
 
         return CLIPTextModelWithProjection
     else:

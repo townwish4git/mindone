@@ -6,7 +6,7 @@ import mindspore.nn as nn
 import mindspore.ops as ops
 from mindspore import Parameter, Tensor
 
-from mindone.models.modules.flash_attention import MSFlashAttention
+from townwish_mindone_testing.models.modules.flash_attention import MSFlashAttention
 
 from ._layers import GELU, LayerNorm
 

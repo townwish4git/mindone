@@ -7,8 +7,8 @@ from PIL import Image
 from tqdm import tqdm
 from transformers import CLIPProcessor
 
-from mindone.metrics import ClipScoreFrame, ClipScoreText
-from mindone.transformers import CLIPModel
+from townwish_mindone_testing.metrics import ClipScoreFrame, ClipScoreText
+from townwish_mindone_testing.transformers import CLIPModel
 
 VIDEO_EXTENSIONS = {".mp4"}
 

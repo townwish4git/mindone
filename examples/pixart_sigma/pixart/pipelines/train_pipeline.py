@@ -10,8 +10,8 @@ from pixart.modules.pixart import PixArt
 import mindspore as ms
 from mindspore import Tensor, mint, nn, ops
 
-from mindone.diffusers import AutoencoderKL
-from mindone.transformers import T5EncoderModel
+from townwish_mindone_testing.diffusers import AutoencoderKL
+from townwish_mindone_testing.transformers import T5EncoderModel
 
 
 class NetworkWithLoss(nn.Cell):

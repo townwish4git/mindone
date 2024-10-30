@@ -23,7 +23,7 @@ import mindspore.numpy as msnp
 from mindspore import nn, ops
 from mindspore.common.initializer import initializer
 
-from mindone.utils.version_control import (
+from townwish_mindone_testing.utils.version_control import (
     MS_VERSION,
     check_valid_flash_attention,
     choose_flash_attention_dtype,

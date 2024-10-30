@@ -8,7 +8,7 @@ from mindcv.utils.download import DownLoad
 import mindspore as ms
 from mindspore import nn
 
-from mindone.utils.params import load_param_into_net_with_filter
+from townwish_mindone_testing.utils.params import load_param_into_net_with_filter
 
 logger = logging.getLogger()
 

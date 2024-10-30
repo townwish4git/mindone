@@ -16,7 +16,7 @@ from opensora.train.commons import parse_args
 from opensora.utils.dataset_utils import Collate, LengthGroupedBatchSampler
 from opensora.utils.message_utils import print_banner
 
-from mindone.utils.config import str2bool
+from townwish_mindone_testing.utils.config import str2bool
 
 
 def load_dataset_and_dataloader(args, device_num=1, rank_id=0):

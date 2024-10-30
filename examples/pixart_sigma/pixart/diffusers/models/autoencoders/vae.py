@@ -3,7 +3,7 @@ from typing import Tuple
 
 import mindspore.nn as nn
 
-from mindone.diffusers.models.autoencoders.vae import Encoder as Encoder_
+from townwish_mindone_testing.diffusers.models.autoencoders.vae import Encoder as Encoder_
 
 from ..unets.unet_2d_blocks import get_down_block
 

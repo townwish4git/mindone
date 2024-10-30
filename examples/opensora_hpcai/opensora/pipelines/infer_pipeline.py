@@ -10,7 +10,7 @@ import numpy as np
 import mindspore as ms
 from mindspore import Tensor, ops
 
-from mindone.models.modules.pos_embed import get_2d_sincos_pos_embed
+from townwish_mindone_testing.models.modules.pos_embed import get_2d_sincos_pos_embed
 
 from ..models.layers.rotary_embedding import precompute_freqs_cis
 from ..models.vae.vae import VideoAutoencoderKL, VideoAutoencoderPipeline

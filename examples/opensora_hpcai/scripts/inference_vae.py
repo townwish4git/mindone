@@ -34,9 +34,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(__dir__, "..")))
 from opensora.datasets.vae_dataset import create_dataloader
 from opensora.models.vae.vae import SD_CONFIG, SDXL_CONFIG, OpenSoraVAE_V1_2, VideoAutoencoderKL
 
-from mindone.utils.amp import auto_mixed_precision
-from mindone.utils.config import instantiate_from_config, str2bool
-from mindone.utils.logger import set_logger
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.config import instantiate_from_config, str2bool
+from townwish_mindone_testing.utils.logger import set_logger
 
 logger = logging.getLogger(__name__)
 

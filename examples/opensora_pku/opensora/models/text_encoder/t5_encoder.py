@@ -8,8 +8,8 @@ import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as ops
 
-from mindone.transformers.activations import ACT2FN
-from mindone.transformers.modeling_utils import MSPreTrainedModel as PreTrainedModel
+from townwish_mindone_testing.transformers.activations import ACT2FN
+from townwish_mindone_testing.transformers.modeling_utils import MSPreTrainedModel as PreTrainedModel
 
 __all__ = ["T5EncoderModel"]
 logger = logging.getLogger(__name__)

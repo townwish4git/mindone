@@ -16,15 +16,15 @@ import mindspore as ms
 from mindspore.dataset.transforms import Compose
 from mindspore.dataset.vision import CenterCrop, Inter, Normalize
 
-from mindone.data.video_reader import VideoReader as VideoReader_CV2
+from townwish_mindone_testing.data.video_reader import VideoReader as VideoReader_CV2
 
 from .bucket import Bucket
 from .transforms import BucketResizeAndCrop, BucketResizeCrop, Resize, ResizeAndCrop
 
 # FIXME: remove in future when mindone is ready for install
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../../.."))
-from mindone.data import BaseDataset
-from mindone.models.modules.pos_embed import get_2d_sincos_pos_embed
+from townwish_mindone_testing.data import BaseDataset
+from townwish_mindone_testing.models.modules.pos_embed import get_2d_sincos_pos_embed
 
 from ..models.layers.rotary_embedding import precompute_freqs_cis
 

@@ -9,8 +9,8 @@ from transformers import AutoTokenizer
 import mindspore as ms
 from mindspore import Tensor, mint, ops
 
-from mindone.diffusers import AutoencoderKL
-from mindone.transformers import T5EncoderModel
+from townwish_mindone_testing.diffusers import AutoencoderKL
+from townwish_mindone_testing.transformers import T5EncoderModel
 
 
 class PixArtInferPipeline:

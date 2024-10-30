@@ -28,7 +28,7 @@ import mindspore as ms
 from mindspore import Tensor, nn, ops
 from mindspore.common.initializer import XavierUniform, initializer
 
-from mindone.models.utils import constant_, normal_, xavier_uniform_
+from townwish_mindone_testing.models.utils import constant_, normal_, xavier_uniform_
 
 
 class STDiTBlock(nn.Cell):

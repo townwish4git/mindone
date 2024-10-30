@@ -23,7 +23,7 @@ import mindspore.numpy as msnp
 from mindspore import nn, ops
 from mindspore.common.initializer import initializer
 
-from mindone.models.modules.flash_attention import FLASH_IS_AVAILABLE, MSFlashAttention
+from townwish_mindone_testing.models.modules.flash_attention import FLASH_IS_AVAILABLE, MSFlashAttention
 
 logger = logging.getLogger()
 

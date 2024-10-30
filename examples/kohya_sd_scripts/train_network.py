@@ -29,8 +29,8 @@ from mindspore import nn, ops
 from mindspore.amp import StaticLossScaler
 from mindspore.dataset import GeneratorDataset
 
-from mindone.diffusers import DDPMScheduler
-from mindone.diffusers.training_utils import AttrJitWrapper, TrainStep, cast_training_params
+from townwish_mindone_testing.diffusers import DDPMScheduler
+from townwish_mindone_testing.diffusers.training_utils import AttrJitWrapper, TrainStep, cast_training_params
 
 
 def unwrap_model(model: nn.Cell, prefix=""):

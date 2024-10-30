@@ -22,10 +22,10 @@ from opensora.models.text_encoder.t5 import get_text_encoder_and_tokenizer
 from opensora.utils.cond_data import read_captions_from_csv, read_captions_from_txt
 from opensora.utils.model_utils import str2bool  # _check_cfgs_in_parser
 
-from mindone.utils.amp import auto_mixed_precision
-from mindone.utils.logger import set_logger
-from mindone.utils.misc import to_abspath
-from mindone.utils.seed import set_random_seed
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.misc import to_abspath
+from townwish_mindone_testing.utils.seed import set_random_seed
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,7 @@ from ad.data.dataset import TextVideoDataset, check_sanity, create_dataloader
 __dir__ = os.path.dirname(os.path.abspath(__file__))
 mindone_lib_path = os.path.abspath(os.path.join(__dir__, "../../../"))
 sys.path.insert(0, mindone_lib_path)
-from mindone.utils.config import instantiate_from_config
+from townwish_mindone_testing.utils.config import instantiate_from_config
 
 csv_path = "../videocomposer/datasets/webvid5/video_caption.csv"
 video_folder = "../videocomposer/datasets/webvid5"

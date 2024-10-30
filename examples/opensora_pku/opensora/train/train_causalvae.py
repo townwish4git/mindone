@@ -27,15 +27,15 @@ from opensora.train.commons import create_loss_scaler, parse_args
 from opensora.utils.ms_utils import init_env
 from opensora.utils.utils import get_precision
 
-from mindone.trainers.callback import EvalSaveCallback, OverflowMonitor, ProfilerCallback
-from mindone.trainers.checkpoint import CheckpointManager, resume_train_network
-from mindone.trainers.lr_schedule import create_scheduler
-from mindone.trainers.optim import create_optimizer
-from mindone.trainers.train_step import TrainOneStepWrapper
-from mindone.utils.amp import auto_mixed_precision
-from mindone.utils.config import str2bool
-from mindone.utils.logger import set_logger
-from mindone.utils.params import count_params
+from townwish_mindone_testing.trainers.callback import EvalSaveCallback, OverflowMonitor, ProfilerCallback
+from townwish_mindone_testing.trainers.checkpoint import CheckpointManager, resume_train_network
+from townwish_mindone_testing.trainers.lr_schedule import create_scheduler
+from townwish_mindone_testing.trainers.optim import create_optimizer
+from townwish_mindone_testing.trainers.train_step import TrainOneStepWrapper
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.config import str2bool
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.params import count_params
 
 logger = logging.getLogger(__name__)
 

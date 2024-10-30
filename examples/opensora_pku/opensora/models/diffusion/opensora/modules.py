@@ -11,11 +11,15 @@ import mindspore as ms
 from mindspore import Parameter, mint, nn, ops
 from mindspore.common.initializer import initializer
 
-from mindone.diffusers.models.attention import FeedForward, GatedSelfAttentionDense
-from mindone.diffusers.models.attention_processor import Attention as Attention_
-from mindone.diffusers.models.embeddings import SinusoidalPositionalEmbedding
-from mindone.diffusers.models.normalization import AdaLayerNorm, AdaLayerNormContinuous, AdaLayerNormZero
-from mindone.utils.version_control import check_valid_flash_attention, choose_flash_attention_dtype
+from townwish_mindone_testing.diffusers.models.attention import FeedForward, GatedSelfAttentionDense
+from townwish_mindone_testing.diffusers.models.attention_processor import Attention as Attention_
+from townwish_mindone_testing.diffusers.models.embeddings import SinusoidalPositionalEmbedding
+from townwish_mindone_testing.diffusers.models.normalization import (
+    AdaLayerNorm,
+    AdaLayerNormContinuous,
+    AdaLayerNormZero,
+)
+from townwish_mindone_testing.utils.version_control import check_valid_flash_attention, choose_flash_attention_dtype
 
 from .rope import PositionGetter3D, RoPE3D
 

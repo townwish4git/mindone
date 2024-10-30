@@ -27,19 +27,19 @@ sys.path.insert(0, mindone_lib_path)
 from diffusion import create_diffusion
 from modules.autoencoder import SD_CONFIG, AutoencoderKL
 
-from mindone.models.dit import DiT_models
+from townwish_mindone_testing.models.dit import DiT_models
 
 # load training modules
-from mindone.trainers.callback import EvalSaveCallback, OverflowMonitor, ProfilerCallback
-from mindone.trainers.checkpoint import resume_train_network
-from mindone.trainers.ema import EMA
-from mindone.trainers.lr_schedule import create_scheduler
-from mindone.trainers.optim import create_optimizer
-from mindone.trainers.train_step import TrainOneStepWrapper
-from mindone.utils.amp import auto_mixed_precision
-from mindone.utils.env import init_train_env
-from mindone.utils.logger import set_logger
-from mindone.utils.params import count_params
+from townwish_mindone_testing.trainers.callback import EvalSaveCallback, OverflowMonitor, ProfilerCallback
+from townwish_mindone_testing.trainers.checkpoint import resume_train_network
+from townwish_mindone_testing.trainers.ema import EMA
+from townwish_mindone_testing.trainers.lr_schedule import create_scheduler
+from townwish_mindone_testing.trainers.optim import create_optimizer
+from townwish_mindone_testing.trainers.train_step import TrainOneStepWrapper
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.env import init_train_env
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.params import count_params
 
 os.environ["HCCL_CONNECT_TIMEOUT"] = "6000"
 

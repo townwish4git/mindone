@@ -29,10 +29,10 @@ from ad.data.dataset import create_video_transforms, read_gif
 from ad.utils.load_models import update_unet2d_params_for_unet3d
 from args_train import parse_args
 
-from mindone.utils.config import get_obj_from_str
-from mindone.utils.logger import set_logger
-from mindone.utils.seed import set_random_seed
-from mindone.utils.version_control import is_old_ms_version
+from townwish_mindone_testing.utils.config import get_obj_from_str
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.seed import set_random_seed
+from townwish_mindone_testing.utils.version_control import is_old_ms_version
 
 logger = logging.getLogger(__name__)
 

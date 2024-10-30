@@ -32,7 +32,7 @@ import mindspore as ms
 from mindspore import Parameter, Tensor, dtype, load_checkpoint, load_param_into_net, nn, ops
 from mindspore.common.initializer import XavierUniform, initializer
 
-from mindone.models.utils import constant_, normal_, xavier_uniform_
+from townwish_mindone_testing.models.utils import constant_, normal_, xavier_uniform_
 
 
 class STDiT2Block(nn.Cell):

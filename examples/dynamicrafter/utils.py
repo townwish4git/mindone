@@ -9,7 +9,7 @@ import mindspore.dataset.transforms as transforms
 import mindspore.ops as ops
 from mindspore.dataset.vision import CenterCrop, Normalize, Resize, ToTensor
 
-from mindone.visualize.videos import save_videos
+from townwish_mindone_testing.visualize.videos import save_videos
 
 
 def str2bool(b):

@@ -13,10 +13,10 @@ from mindspore import Callback, Model, nn
 from mindspore.train.callback import LossMonitor
 
 sys.path.append("../../")  # FIXME: remove in future when mindone is ready for install
-from mindone.data import BaseDataset, create_dataloader
-from mindone.trainers import create_optimizer, create_scheduler
-from mindone.utils import count_params, set_logger
-from mindone.utils.env import init_train_env
+from townwish_mindone_testing.data import BaseDataset, create_dataloader
+from townwish_mindone_testing.trainers import create_optimizer, create_scheduler
+from townwish_mindone_testing.utils import count_params, set_logger
+from townwish_mindone_testing.utils.env import init_train_env
 
 sys.path.append("../stable_diffusion_xl")
 from gm.helpers import create_model

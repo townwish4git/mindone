@@ -10,12 +10,18 @@ from opensora.utils.utils import to_2tuple
 import mindspore as ms
 from mindspore import mint, nn, ops
 
-from mindone.diffusers import __version__
-from mindone.diffusers.configuration_utils import ConfigMixin, register_to_config
-from mindone.diffusers.models.embeddings import PixArtAlphaTextProjection
-from mindone.diffusers.models.modeling_utils import ModelMixin, load_state_dict
-from mindone.diffusers.models.normalization import AdaLayerNormSingle
-from mindone.diffusers.utils import SAFETENSORS_WEIGHTS_NAME, WEIGHTS_NAME, _add_variant, _get_model_file, deprecate
+from townwish_mindone_testing.diffusers import __version__
+from townwish_mindone_testing.diffusers.configuration_utils import ConfigMixin, register_to_config
+from townwish_mindone_testing.diffusers.models.embeddings import PixArtAlphaTextProjection
+from townwish_mindone_testing.diffusers.models.modeling_utils import ModelMixin, load_state_dict
+from townwish_mindone_testing.diffusers.models.normalization import AdaLayerNormSingle
+from townwish_mindone_testing.diffusers.utils import (
+    SAFETENSORS_WEIGHTS_NAME,
+    WEIGHTS_NAME,
+    _add_variant,
+    _get_model_file,
+    deprecate,
+)
 
 from .modules import BasicTransformerBlock, LayerNorm, OverlapPatchEmbed2D, OverlapPatchEmbed3D, PatchEmbed2D
 

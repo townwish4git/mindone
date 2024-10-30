@@ -9,7 +9,7 @@ import torch
 import mindspore as ms
 import mindspore.nn as nn
 
-from mindone.diffusers.schedulers.scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin
+from townwish_mindone_testing.diffusers.schedulers.scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin
 
 THR_FP16 = 1e-2  # On the NPU, you can lower the threshold.
 THR_FP32 = 1e-5

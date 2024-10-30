@@ -3,8 +3,8 @@ from typing import Optional, Tuple
 
 import mindspore.nn as nn
 
-from mindone.diffusers import AutoencoderKL as AutoencoderKL_
-from mindone.diffusers.configuration_utils import register_to_config
+from townwish_mindone_testing.diffusers import AutoencoderKL as AutoencoderKL_
+from townwish_mindone_testing.diffusers.configuration_utils import register_to_config
 
 from .vae import Encoder
 

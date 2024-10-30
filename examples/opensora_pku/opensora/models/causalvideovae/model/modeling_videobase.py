@@ -1,7 +1,7 @@
 import mindspore as ms
 
-from mindone.diffusers import ModelMixin
-from mindone.diffusers.configuration_utils import ConfigMixin
+from townwish_mindone_testing.diffusers import ModelMixin
+from townwish_mindone_testing.diffusers.configuration_utils import ConfigMixin
 
 
 class VideoBaseAE(ModelMixin, ConfigMixin):

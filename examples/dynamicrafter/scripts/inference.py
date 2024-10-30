@@ -21,10 +21,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(__dir__, "..")))
 from lvdm.models.samplers.ddim import DDIMSampler
 from utils import load_data_prompts, save_results_seperate
 
-from mindone.utils.amp import auto_mixed_precision
-from mindone.utils.config import instantiate_from_config, str2bool
-from mindone.utils.logger import set_logger
-from mindone.utils.seed import set_random_seed
+from townwish_mindone_testing.utils.amp import auto_mixed_precision
+from townwish_mindone_testing.utils.config import instantiate_from_config, str2bool
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.seed import set_random_seed
 
 logger = logging.getLogger(__name__)
 

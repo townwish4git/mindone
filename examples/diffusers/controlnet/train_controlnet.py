@@ -35,7 +35,7 @@ from mindspore import nn, ops
 from mindspore.amp import StaticLossScaler
 from mindspore.dataset import GeneratorDataset, transforms, vision
 
-from mindone.diffusers import (
+from townwish_mindone_testing.diffusers import (
     AutoencoderKL,
     ControlNetModel,
     DDPMScheduler,
@@ -43,8 +43,14 @@ from mindone.diffusers import (
     UNet2DConditionModel,
     UniPCMultistepScheduler,
 )
-from mindone.diffusers.optimization import get_scheduler
-from mindone.diffusers.training_utils import AttrJitWrapper, TrainStep, init_distributed_device, is_master, set_seed
+from townwish_mindone_testing.diffusers.optimization import get_scheduler
+from townwish_mindone_testing.diffusers.training_utils import (
+    AttrJitWrapper,
+    TrainStep,
+    init_distributed_device,
+    is_master,
+    set_seed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +141,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
     model_class = text_encoder_config.architectures[0]
 
     if model_class == "CLIPTextModel":
-        from mindone.transformers import CLIPTextModel
+        from townwish_mindone_testing.transformers import CLIPTextModel
 
         return CLIPTextModel
     elif model_class == "RobertaSeriesModelWithTransformation":

@@ -23,10 +23,10 @@ from ad.pipelines.infer_engine import AnimateDiffText2Video
 from ad.utils.cond_data import transform_conditional_images
 from ad.utils.load_models import build_model_from_config, load_adapter_lora, load_controlnet, load_motion_modules
 
-from mindone.utils.config import instantiate_from_config, str2bool
-from mindone.utils.logger import set_logger
-from mindone.utils.seed import set_random_seed
-from mindone.visualize.videos import save_videos
+from townwish_mindone_testing.utils.config import instantiate_from_config, str2bool
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.seed import set_random_seed
+from townwish_mindone_testing.visualize.videos import save_videos
 
 logger = logging.getLogger(__name__)
 

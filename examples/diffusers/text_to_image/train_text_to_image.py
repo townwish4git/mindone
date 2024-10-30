@@ -35,9 +35,14 @@ from mindspore import nn, ops
 from mindspore.amp import StaticLossScaler
 from mindspore.dataset import GeneratorDataset, transforms, vision
 
-from mindone.diffusers import AutoencoderKL, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
-from mindone.diffusers.optimization import get_scheduler
-from mindone.diffusers.training_utils import (
+from townwish_mindone_testing.diffusers import (
+    AutoencoderKL,
+    DDPMScheduler,
+    StableDiffusionPipeline,
+    UNet2DConditionModel,
+)
+from townwish_mindone_testing.diffusers.optimization import get_scheduler
+from townwish_mindone_testing.diffusers.training_utils import (
     AttrJitWrapper,
     TrainStep,
     compute_snr,
@@ -45,8 +50,8 @@ from mindone.diffusers.training_utils import (
     is_master,
     set_seed,
 )
-from mindone.diffusers.utils import deprecate
-from mindone.transformers import CLIPTextModel
+from townwish_mindone_testing.diffusers.utils import deprecate
+from townwish_mindone_testing.transformers import CLIPTextModel
 
 logger = logging.getLogger(__name__)
 

@@ -20,10 +20,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(__dir__, "..")))
 from opensora.models.vae.vae import SD_CONFIG, AutoencoderKL
 from opensora.utils.model_utils import _check_cfgs_in_parser, str2bool
 
-from mindone.utils.logger import set_logger
-from mindone.utils.misc import to_abspath
-from mindone.utils.seed import set_random_seed
-from mindone.visualize.videos import save_videos
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.misc import to_abspath
+from townwish_mindone_testing.utils.seed import set_random_seed
+from townwish_mindone_testing.visualize.videos import save_videos
 
 logger = logging.getLogger(__name__)
 

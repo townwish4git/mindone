@@ -9,7 +9,7 @@ from PIL import Image
 
 from mindspore.dataset.vision import Inter
 
-from mindone.data.video_reader import VideoReader
+from townwish_mindone_testing.data.video_reader import VideoReader
 
 from ..datasets.video_dataset_refactored import create_infer_transforms
 

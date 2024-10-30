@@ -42,15 +42,20 @@ from opensora.utils.metrics import BucketLoss
 from opensora.utils.model_utils import WHITELIST_OPS, Model
 from opensora.utils.resume import flush_from_cache, get_resume_ckpt, get_resume_states, resume_train_net, save_train_net
 
-from mindone.trainers.callback import EvalSaveCallback, OverflowMonitor, ProfilerCallbackEpoch, StopAtStepCallback
-from mindone.trainers.checkpoint import CheckpointManager
-from mindone.trainers.lr_schedule import create_scheduler
-from mindone.trainers.optim import create_optimizer
-from mindone.trainers.recorder import PerfRecorder
-from mindone.trainers.zero import prepare_train_network
-from mindone.utils.logger import set_logger
-from mindone.utils.params import count_params
-from mindone.utils.seed import set_random_seed
+from townwish_mindone_testing.trainers.callback import (
+    EvalSaveCallback,
+    OverflowMonitor,
+    ProfilerCallbackEpoch,
+    StopAtStepCallback,
+)
+from townwish_mindone_testing.trainers.checkpoint import CheckpointManager
+from townwish_mindone_testing.trainers.lr_schedule import create_scheduler
+from townwish_mindone_testing.trainers.optim import create_optimizer
+from townwish_mindone_testing.trainers.recorder import PerfRecorder
+from townwish_mindone_testing.trainers.zero import prepare_train_network
+from townwish_mindone_testing.utils.logger import set_logger
+from townwish_mindone_testing.utils.params import count_params
+from townwish_mindone_testing.utils.seed import set_random_seed
 
 os.environ["HCCL_CONNECT_TIMEOUT"] = "6000"
 os.environ["MS_ASCEND_CHECK_OVERFLOW_MODE"] = "INFNAN_MODE"

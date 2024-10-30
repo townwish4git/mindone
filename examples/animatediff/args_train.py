@@ -4,7 +4,7 @@ import os
 
 import yaml
 
-from mindone.utils.config import str2bool
+from townwish_mindone_testing.utils.config import str2bool
 
 logger = logging.getLogger()
 

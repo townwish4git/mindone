@@ -3,9 +3,9 @@ from typing import Optional
 
 import mindspore.nn as nn
 
-from mindone.diffusers.models.unets.unet_2d_blocks import DownEncoderBlock2D as DownEncoderBlock2D_
-from mindone.diffusers.models.unets.unet_2d_blocks import ResnetBlockCondNorm2D
-from mindone.diffusers.models.unets.unet_2d_blocks import get_down_block as get_down_block_
+from townwish_mindone_testing.diffusers.models.unets.unet_2d_blocks import DownEncoderBlock2D as DownEncoderBlock2D_
+from townwish_mindone_testing.diffusers.models.unets.unet_2d_blocks import ResnetBlockCondNorm2D
+from townwish_mindone_testing.diffusers.models.unets.unet_2d_blocks import get_down_block as get_down_block_
 
 from ..resnet import ResnetBlock2D
 

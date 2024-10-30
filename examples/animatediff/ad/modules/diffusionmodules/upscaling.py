@@ -8,7 +8,7 @@ import mindspore.nn as nn
 import mindspore.ops as ops
 from mindspore import Tensor
 
-from mindone.utils.misc import extract_into_tensor
+from townwish_mindone_testing.utils.misc import extract_into_tensor
 
 
 class AbstractLowScaleModel(nn.Cell):

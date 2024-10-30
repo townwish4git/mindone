@@ -2,7 +2,7 @@ from typing import Any, Dict, TypeVar
 
 import yaml
 
-from mindone.diffusers import ConfigMixin
+from townwish_mindone_testing.diffusers import ConfigMixin
 
 T = TypeVar("T", bound="VideoBaseConfiguration")
 

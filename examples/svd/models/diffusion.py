@@ -10,7 +10,7 @@ from mindspore import Tensor, nn, ops
 
 # FIXME: remove in future when mindone is ready for install
 sys.path.append(os.path.abspath(os.path.join(__file__, "../../../../")))
-from mindone.utils.version_control import MS_VERSION, is_910b
+from townwish_mindone_testing.utils.version_control import MS_VERSION, is_910b
 
 
 def net_to_dtype(

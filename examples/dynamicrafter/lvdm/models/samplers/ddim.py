@@ -5,7 +5,7 @@ from tqdm import tqdm
 import mindspore as ms
 import mindspore.ops as ops
 
-from mindone.utils.misc import extract_into_tensor
+from townwish_mindone_testing.utils.misc import extract_into_tensor
 
 
 class DDIMSampler(object):

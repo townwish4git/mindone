@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mindone"
+name = "townwish_mindone_testing"
 dynamic = ["version"]
 description = "ONE for all, Optimal generator with No Exception."
 readme = "README.md"
@@ -61,22 +61,22 @@ tests = [
     "pytest-cov"
 ]
 dev = [
-  "mindone[lint,docs,training,tests]"  # Self-referential. Developers install everything.
+  "townwish_mindone_testing[lint,docs,training,tests]"  # Self-referential. Developers install everything.
 ]
 
 [project.urls]
-Homepage = "https://pypi.org/project/mindone/"
-Documentation = "https://mindspore-lab.github.io/mindone/"
-Issues = "https://github.com/mindspore-lab/mindone/issues"
-Source = "https://github.com/mindspore-lab/mindone"
+Homepage = "https://pypi.org/project/townwish_mindone_testing/"
 
 [tool.hatch.envs.default]
 python = "3.8"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.version]
 # Since we always work in dev(or editable) mode at this stage, it makes sense to keep the version file.
 # In the future, we will deprecate the version file and use hatch-vcs to determine the project version.
-path = "mindone/version.py"
+path = "townwish_mindone_testing/version.py"
 
 [tool.hatch.build.targets.sdist]
 exclude = [
@@ -89,7 +89,7 @@ exclude = [
 profile = "black"
 line_length = 120
 known_mindspore = ["mindspore"]
-known_first_party = ["mindone"]
+known_first_party = ["townwish_mindone_testing"]
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "MINDSPORE", "FIRSTPARTY", "LOCALFOLDER"]
 
 [tool.black]

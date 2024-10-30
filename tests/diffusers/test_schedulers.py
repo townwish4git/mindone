@@ -10,7 +10,7 @@ import torch
 import mindspore as ms
 import mindspore.nn as nn
 
-from mindone.diffusers.schedulers.scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin
+from townwish_mindone_testing.diffusers.schedulers.scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin
 
 STEP_THR_FP16 = 1e-2
 STEP_THR_FP32 = 1e-4

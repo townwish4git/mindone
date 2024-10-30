@@ -9,7 +9,7 @@ from ldm.data.transforms import CannyRandomThreshold
 
 from mindspore.dataset.vision import Resize, ToTensor
 
-from mindone.data import BaseDataset
+from townwish_mindone_testing.data import BaseDataset
 
 
 class CondDataset(BaseDataset, ABC):

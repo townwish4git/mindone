@@ -14,7 +14,7 @@ from transformers.models.clip.configuration_clip import CLIPTextConfig
 
 import mindspore as ms
 
-from mindone.transformers import CLIPTextModel
+from townwish_mindone_testing.transformers import CLIPTextModel
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ import yaml
 from mindspore import nn
 from mindspore.nn.wrap.loss_scale import DynamicLossScaleUpdateCell
 
-from mindone.utils.config import str2bool
+from townwish_mindone_testing.utils.config import str2bool
 
 logger = logging.getLogger(__name__)
 

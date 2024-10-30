@@ -7,7 +7,7 @@ from opensora.acceleration.parallel_states import initialize_sequence_parallel_s
 import mindspore as ms
 from mindspore.communication.management import get_group_size, get_rank, init
 
-from mindone.utils.seed import set_random_seed
+from townwish_mindone_testing.utils.seed import set_random_seed
 
 logger = logging.getLogger(__name__)
 
