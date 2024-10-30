@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mindone"
+name = "townwish_mindone_testing"
 dynamic = ["version"]
 description = "ONE for all, Optimal generator with No Exception."
 readme = "README.md"
@@ -61,14 +61,11 @@ tests = [
     "pytest-cov"
 ]
 dev = [
-  "mindone[lint,docs,training,tests]"  # Self-referential. Developers install everything.
+  "townwish_mindone_testing[lint,docs,training,tests]"  # Self-referential. Developers install everything.
 ]
 
 [project.urls]
-Homepage = "https://pypi.org/project/mindone/"
-Documentation = "https://mindspore-lab.github.io/mindone/"
-Issues = "https://github.com/mindspore-lab/mindone/issues"
-Source = "https://github.com/mindspore-lab/mindone"
+Homepage = "https://pypi.org/project/townwish_mindone_testing/"
 
 [tool.hatch.envs.default]
 python = "3.8"
