@@ -385,10 +385,22 @@ class CogVideoXVideoToVideoPipeline(DiffusionPipeline):
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
+    def fake_decode_latents_to_register_conv_cache(self, latents):
+        latents_shape_without_frame = (latents.shape[0], latents.shape[1], latents.shape[3], latents.shape[4])
+        if (
+            not hasattr(self, "latents_shape_for_conv_cache_registery")
+            or self.latents_shape_for_conv_cache_registery != latents_shape_without_frame
+        ):
+            self.vae.fake_decode_to_register_conv_cache(latents)
+            self.latents_shape_for_conv_cache_registery = latents_shape_without_frame
+
     # Copied from diffusers.pipelines.cogvideo.pipeline_cogvideox.CogVideoXPipeline.decode_latents
     def decode_latents(self, latents: ms.Tensor) -> ms.Tensor:
         latents = latents.permute(0, 2, 1, 3, 4)  # [batch_size, num_channels, num_frames, height, width]
         latents = 1 / self.vae.config.scaling_factor * latents
+
+        # register conv cache for VAE
+        self.fake_decode_latents_to_register_conv_cache(latents)
 
         frames = self.vae.decode(latents)[0]
         return frames

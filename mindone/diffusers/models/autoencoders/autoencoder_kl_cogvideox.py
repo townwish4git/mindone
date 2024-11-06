@@ -18,7 +18,7 @@ from typing import Optional, Tuple, Union
 import numpy as np
 
 import mindspore as ms
-from mindspore import nn, ops
+from mindspore import Parameter, context, nn, ops
 
 from ...configuration_utils import ConfigMixin, register_to_config
 from ...loaders.single_file_model import FromOriginalModelMixin
@@ -33,6 +33,24 @@ from ..upsampling import CogVideoXUpsample3D
 from .vae import DecoderOutput, DiagonalGaussianDistribution
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
+
+def register_conv_cache_hook_fn(param_prefix):
+    def func(cell, inputs):
+        bs, channel, frame, height, width = inputs[0].shape
+        cache_shape = (bs, channel, cell.time_kernel_size - 1, height, width)
+
+        requires_registery = cell.time_kernel_size > 1 and (
+            cell.conv_cache is None or cell.conv_cache.shape != cache_shape
+        )
+
+        if requires_registery:
+            cell.conv_cache = Parameter(
+                ops.zeros(size=(bs, channel, cell.time_kernel_size - 1, height, width), dtype=inputs[0].dtype),
+                name=param_prefix + ".conv_cache",
+            )
+
+    return func
 
 
 class CogVideoXSafeConv3d(nn.Conv3d):
@@ -118,25 +136,50 @@ class CogVideoXCausalConv3d(nn.Cell):
         )
 
         self.conv_cache = None
+        self.is_conv_cache_available = Parameter(ms.Tensor(False), name="is_conv_cache_available", requires_grad=False)
 
     def fake_context_parallel_forward(self, inputs: ms.Tensor) -> ms.Tensor:
         kernel_size = self.time_kernel_size
         if kernel_size > 1:
-            cached_inputs = [self.conv_cache] if self.conv_cache is not None else [inputs[:, :, :1]] * (kernel_size - 1)
-            inputs = ops.cat(cached_inputs + [inputs], axis=2)
+            if self.is_conv_cache_available:
+                inputs = ops.cat([self.conv_cache, inputs], axis=2)
+            else:
+                inputs = ops.cat([inputs[:, :, :1]] * (kernel_size - 1) + [inputs], axis=2)
+
+            # self._clear_fake_context_parallel_cache()
+            # Note: we could move these to the cpu for a lower maximum memory usage but its only a few
+            # hundred megabytes and so let's not do it for now
+            self.assign_conv_cache(inputs[:, :, -self.time_kernel_size + 1 :].copy())
+
         return inputs
 
-    def _clear_fake_context_parallel_cache(self):
-        del self.conv_cache
-        self.conv_cache = None
+    def assign_conv_cache(self, conv_cache: ms.Tensor):
+        assert self.conv_cache is not None, (
+            "`self.conv_cache` should be registered as MindSpore.Parameter firstly. Go to "
+            "'https://gist.github.com/townwish4git/19b32ad639e950ae39fcc790adbb3302#1-vae' for more information"
+        )
+        assert self.conv_cache.shape == conv_cache.shape, (
+            f"`self.conv_cache` and `conv_cache` to assign should have same shape, buy got {self.conv_cache.shape} and {conv_cache.shape}. "
+            f"Consider re-register self.conv_cache again. Go to 'https://gist.github.com/townwish4git/19b32ad639e950ae39fcc790adbb3302#1-vae' "
+            f"for more information"
+        )
+        ops.assign(self.conv_cache, conv_cache)
+        ops.assign(self.is_conv_cache_available, True)
+
+    def _clear_fake_context_parallel_cache(self, unregister: bool):
+        ops.assign(self.is_conv_cache_available, False)
+        if unregister:
+            self.conv_cache = None
+
+    def register_conv_cache_hooks(self, param_prefix):
+        hook_fn = register_conv_cache_hook_fn(param_prefix=param_prefix)
+        self.conv_cache_hooks_handle = self.register_forward_pre_hook(hook_fn)
+
+    def unregister_conv_cache_hooks(self):
+        self.conv_cache_hooks_handle.remove()
 
     def construct(self, inputs: ms.Tensor) -> ms.Tensor:
         inputs = self.fake_context_parallel_forward(inputs)
-
-        self._clear_fake_context_parallel_cache()
-        # Note: we could move these to the cpu for a lower maximum memory usage but its only a few
-        # hundred megabytes and so let's not do it for now
-        self.conv_cache = inputs[:, :, -self.time_kernel_size + 1 :].copy()
 
         padding_2d = (self.width_pad, self.width_pad, self.height_pad, self.height_pad)
         inputs = pad(inputs, padding_2d, mode="constant", value=0)
@@ -731,6 +774,18 @@ class CogVideoXEncoder3D(nn.Cell):
         hidden_states = self.conv_out(hidden_states)
         return hidden_states
 
+    def register_conv_cache_hooks(self):
+        for name, module in self.cells_and_names():
+            if isinstance(module, CogVideoXCausalConv3d):
+                logger.debug(f"Register fake Context Parallel cache for layer: {name}")
+                module.register_conv_cache_hooks(param_prefix=name)
+
+    def unregister_conv_cache_hooks(self):
+        for name, module in self.cells_and_names():
+            if isinstance(module, CogVideoXCausalConv3d):
+                logger.debug(f"Unregister fake Context Parallel cache for layer: {name}")
+                module.unregister_conv_cache_hooks()
+
 
 class CogVideoXDecoder3D(nn.Cell):
     r"""
@@ -864,6 +919,18 @@ class CogVideoXDecoder3D(nn.Cell):
         hidden_states = self.conv_act(hidden_states)
         hidden_states = self.conv_out(hidden_states)
         return hidden_states
+
+    def register_conv_cache_hooks(self):
+        for name, module in self.cells_and_names():
+            if isinstance(module, CogVideoXCausalConv3d):
+                logger.debug(f"Register fake Context Parallel cache for layer: {name}")
+                module.register_conv_cache_hooks(param_prefix=name)
+
+    def unregister_conv_cache_hooks(self):
+        for name, module in self.cells_and_names():
+            if isinstance(module, CogVideoXCausalConv3d):
+                logger.debug(f"Unregister fake Context Parallel cache for layer: {name}")
+                module.unregister_conv_cache_hooks()
 
 
 class AutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMixin):
@@ -1007,11 +1074,11 @@ class AutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMixin):
         if isinstance(module, (CogVideoXEncoder3D, CogVideoXDecoder3D)):
             module.gradient_checkpointing = value
 
-    def _clear_fake_context_parallel_cache(self):
+    def _clear_fake_context_parallel_cache(self, unregister):
         for name, module in self.cells_and_names():
             if isinstance(module, CogVideoXCausalConv3d):
                 logger.debug(f"Clearing fake Context Parallel cache for layer: {name}")
-                module._clear_fake_context_parallel_cache()
+                module._clear_fake_context_parallel_cache(unregister=unregister)
 
     def enable_tiling(
         self,
@@ -1090,7 +1157,7 @@ class AutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMixin):
                 x_intermediate = self.quant_conv(x_intermediate)
             enc.append(x_intermediate)
 
-        self._clear_fake_context_parallel_cache()
+        self._clear_fake_context_parallel_cache(unregister=False)
         enc = ops.cat(enc, axis=2)
 
         return enc
@@ -1141,7 +1208,7 @@ class AutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMixin):
             z_intermediate = self.decoder(z_intermediate)
             dec.append(z_intermediate)
 
-        self._clear_fake_context_parallel_cache()
+        self._clear_fake_context_parallel_cache(unregister=False)
         dec = ops.cat(dec, axis=2)
 
         if not return_dict:
@@ -1240,7 +1307,7 @@ class AutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMixin):
                     if self.quant_conv is not None:
                         tile = self.quant_conv(tile)
                     time.append(tile)
-                self._clear_fake_context_parallel_cache()
+                self._clear_fake_context_parallel_cache(unregister=False)
                 row.append(ops.cat(time, axis=2))
             rows.append(row)
 
@@ -1317,7 +1384,7 @@ class AutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMixin):
                         tile = self.post_quant_conv(tile)
                     tile = self.decoder(tile)
                     time.append(tile)
-                self._clear_fake_context_parallel_cache()
+                self._clear_fake_context_parallel_cache(unregister=False)
                 row.append(ops.cat(time, axis=2))
             rows.append(row)
 
@@ -1358,3 +1425,66 @@ class AutoencoderKLCogVideoX(ModelMixin, ConfigMixin, FromOriginalModelMixin):
         if not return_dict:
             return (dec,)
         return dec
+
+    def register_conv_cache_hooks(self):
+        for name, module in self.cells_and_names():
+            if isinstance(module, CogVideoXCausalConv3d):
+                logger.debug(f"Register fake Context Parallel cache for layer: {name}")
+                module.register_conv_cache_hooks(param_prefix=name)
+
+    def unregister_conv_cache_hooks(self):
+        for name, module in self.cells_and_names():
+            if isinstance(module, CogVideoXCausalConv3d):
+                logger.debug(f"Unregister fake Context Parallel cache for layer: {name}")
+                module.unregister_conv_cache_hooks()
+
+    def fake_forward_to_register_conv_cache(
+        self,
+        sample: ms.Tensor,
+        sample_posterior: bool = False,
+        return_dict: bool = False,
+        generator: Optional[np.random.Generator] = None,
+    ) -> Union[ms.Tensor, ms.Tensor]:
+        origin_mindspore_mode = context._get_mode()
+        context.set_context(mode=context.PYNATIVE_MODE)
+
+        self.register_conv_cache_hooks()
+        outputs = self(
+            sample=sample,
+            sample_posterior=sample_posterior,
+            return_dict=return_dict,
+            generator=generator,
+        )
+        self.unregister_conv_cache_hooks()
+
+        context.set_context(mode=origin_mindspore_mode)
+
+        return outputs
+
+    def fake_encode_to_register_conv_cache(
+        self, x: ms.Tensor, return_dict: bool = False
+    ) -> Union[AutoencoderKLOutput, Tuple[DiagonalGaussianDistribution]]:
+        origin_mindspore_mode = context._get_mode()
+        context.set_context(mode=context.PYNATIVE_MODE)
+
+        self.register_conv_cache_hooks()
+        outputs = self.encode(z=x, return_dict=return_dict)
+        self.unregister_conv_cache_hooks()
+
+        context.set_context(mode=origin_mindspore_mode)
+
+        return outputs
+
+    def fake_decode_to_register_conv_cache(
+        self, z: ms.Tensor, return_dict: bool = False
+    ) -> Union[DecoderOutput, ms.Tensor]:
+        origin_mindspore_mode = context._get_mode()
+        context.set_context(mode=context.PYNATIVE_MODE)
+
+        self.register_conv_cache_hooks()
+        outputs = self.decode(z=z, return_dict=return_dict)
+        self.unregister_conv_cache_hooks()
+
+        context.set_context(mode=origin_mindspore_mode)
+
+        return outputs
