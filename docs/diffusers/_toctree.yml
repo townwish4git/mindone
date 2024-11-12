@@ -121,8 +121,6 @@
     title: Speed up inference
   - local: optimization/memory
     title: Reduce memory usage
-  - local: optimization/xformers
-    title: xFormers
   title: Accelerate inference and reduce memory
 - sections:
   - local: conceptual/philosophy
