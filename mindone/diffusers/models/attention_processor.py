@@ -19,6 +19,7 @@ from mindspore import nn, ops
 
 from ..image_processor import IPAdapterMaskProcessor
 from ..utils import is_mindspore_version, logging
+from ..utils.mindspore_utils import dtype_to_min
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -698,9 +699,9 @@ class Attention(nn.Cell):
         value: ms.Tensor,
         attn_mask: Optional[ms.Tensor] = None,
     ):
-        # Adapt from mindone.diffusers.models.unets.unet_2d_condition.UNet2DConditionModel.construct
-        if attn_mask is not None:
-            attn_mask = ops.logical_not(attn_mask) * -10000.0
+        # Adapted from mindone.diffusers.models.unets.unet_2d_condition.UNet2DConditionModel.construct
+        if attn_mask is not None and attn_mask.dtype == ms.bool_:
+            attn_mask = ops.logical_not(attn_mask) * dtype_to_min(query.dtype)
 
         attention_probs = self.get_attention_scores(query, key, attn_mask)
         hidden_states = ops.bmm(attention_probs, value)
@@ -724,6 +725,11 @@ class Attention(nn.Cell):
         if query.ndim == 3:
             input_layout = "BSH"
             head_num = 1
+
+        # process `attn_mask` as logic is different between PyTorch and Mindspore
+        # In MindSpore, False indicates retention and True indicates discard, in PyTorch it is the opposite
+        if attn_mask is not None:
+            attn_mask = ops.logical_not(attn_mask) if attn_mask.dtype == ms.bool_ else attn_mask.bool()
 
         return ops.operations.nn_ops.FlashAttentionScore(
             head_num=head_num, keep_prob=keep_prob, scale_value=scale or self.scale, input_layout=input_layout
