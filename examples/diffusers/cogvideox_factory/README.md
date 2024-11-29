@@ -14,6 +14,31 @@ Fine-tune Cog family of video models for custom video generation under 24GB of G
 
 Clone the repository and make sure the requirements are installed: `pip install -r requirements.txt` and install diffusers from source by `pip install git+https://github.com/huggingface/diffusers`.
 
+> [!TIP]
+> Python library `decord` is required for reading video data. The pre-built packages available on PyPI may have system-specific limitations. If you encounter such a limitation, you can install the package from source. Here is an instruction on `ffmpeg` and `decord` install on EulerOS:
+>
+> 1. install ffmpeg 4, referring to https://ffmpeg.org/releases:
+> ```
+>     wget https://ffmpeg.org/releases/ffmpeg-4.0.1.tar.bz2 --no-check-certificate
+>     tar -xvf ffmpeg-4.0.1.tar.bz2
+>     mv ffmpeg-4.0.1 ffmpeg
+>     cd ffmpeg
+>     ./configure --enable-shared  # --enable-shared is needed for sharing libavcodec with decord
+>     make -j 64
+>     make install
+> ```
+> 2. install decord, referring to [dmlc/decord](https://github.com/dmlc/decord?tab=readme-ov-file#install-from-source):
+> ```
+>     git clone --recursive https://github.com/dmlc/decord
+>     cd decord
+>     if [ -d build ];then rm -r build;fi && mkdir build && cd build
+>     cmake .. -DUSE_CUDA=0 -DCMAKE_BUILD_TYPE=Release
+>     make -j 64
+>     make install
+>     cd ../python
+>     python3 setup.py install --user
+> ```
+
 Then download a dataset:
 
 ```bash
@@ -156,7 +181,7 @@ Before starting the training, please check whether the dataset has been prepared
             --allow_tf32 \
             --report_to wandb \
             --nccl_timeout 1800"
-          
+
           echo "Running command: $cmd"
           eval $cmd
           echo -ne "-------------------- Finished executing script --------------------\n\n"
@@ -202,7 +227,7 @@ Supported and verified memory optimizations for training include:
 
 - `CPUOffloadOptimizer` from [`torchao`](https://github.com/pytorch/ao). You can read about its capabilities and limitations [here](https://github.com/pytorch/ao/tree/main/torchao/prototype/low_bit_optim#optimizer-cpu-offload). In short, it allows you to use the CPU for storing trainable parameters and gradients. This results in the optimizer step happening on the CPU, which requires a fast CPU optimizer, such as `torch.optim.AdamW(fused=True)` or applying `torch.compile` on the optimizer step. Additionally, it is recommended not to `torch.compile` your model for training. Gradient clipping and accumulation is not supported yet either.
 - Low-bit optimizers from [`bitsandbytes`](https://huggingface.co/docs/bitsandbytes/optimizers). TODO: to test and make [`torchao`](https://github.com/pytorch/ao/tree/main/torchao/prototype/low_bit_optim) ones work
-- DeepSpeed Zero2: Since we rely on `accelerate`, follow [this guide](https://huggingface.co/docs/accelerate/en/usage_guides/deepspeed) to configure your `accelerate` installation to enable training with DeepSpeed Zero2 optimizations. 
+- DeepSpeed Zero2: Since we rely on `accelerate`, follow [this guide](https://huggingface.co/docs/accelerate/en/usage_guides/deepspeed) to configure your `accelerate` installation to enable training with DeepSpeed Zero2 optimizations.
 
 > [!IMPORTANT]
 > The memory requirements are reported after running the `training/prepare_dataset.py`, which converts the videos and captions to latents and embeddings. During training, we directly load the latents and embeddings, and do not require the VAE or the T5 text encoder. However, if you perform validation/testing, these must be loaded and increase the amount of required memory. Not performing validation/testing saves a significant amount of memory, which can be used to focus solely on training if you're on smaller VRAM GPUs.

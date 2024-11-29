@@ -1,13 +1,10 @@
-import gc
-import inspect
-from typing import Optional, Tuple, Union
+from typing import Tuple, Union
 
-import torch
-from accelerate import Accelerator
-from accelerate.logging import get_logger
-from diffusers.models.embeddings import get_3d_rotary_pos_embed
-from diffusers.utils.torch_utils import is_compiled_module
+import numpy as np
 
+from mindspore import nn
+
+from mindone.diffusers.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -30,147 +27,42 @@ def get_optimizer(
     use_deepspeed: bool = False,
     use_cpu_offload_optimizer: bool = False,
     offload_gradients: bool = False,
-) -> torch.optim.Optimizer:
+) -> nn.Optimizer:
     optimizer_name = optimizer_name.lower()
 
-    # Use DeepSpeed optimzer
-    if use_deepspeed:
-        from accelerate.utils import DummyOptim
-
-        return DummyOptim(
-            params_to_optimize,
-            lr=learning_rate,
-            betas=(beta1, beta2),
-            eps=epsilon,
-            weight_decay=weight_decay,
-        )
-
-    if use_8bit and use_4bit:
-        raise ValueError("Cannot set both `use_8bit` and `use_4bit` to True.")
-
-    if (use_torchao and (use_8bit or use_4bit)) or use_cpu_offload_optimizer:
-        try:
-            import torchao
-
-            torchao.__version__
-        except ImportError:
-            raise ImportError(
-                "To use optimizers from torchao, please install the torchao library: `USE_CPP=0 pip install torchao`."
-            )
-
-    if not use_torchao and use_4bit:
-        raise ValueError("4-bit Optimizers are only supported with torchao.")
-
     # Optimizer creation
-    supported_optimizers = ["adam", "adamw", "prodigy", "came"]
+    supported_optimizers = ["adam", "adamw"]  # "prodigy", "came"
     if optimizer_name not in supported_optimizers:
         logger.warning(
             f"Unsupported choice of optimizer: {optimizer_name}. Supported optimizers include {supported_optimizers}. Defaulting to `AdamW`."
         )
         optimizer_name = "adamw"
 
-    if (use_8bit or use_4bit) and optimizer_name not in ["adam", "adamw"]:
-        raise ValueError("`use_8bit` and `use_4bit` can only be used with the Adam and AdamW optimizers.")
-
-    if use_8bit:
-        try:
-            import bitsandbytes as bnb
-        except ImportError:
-            raise ImportError(
-                "To use 8-bit Adam, please install the bitsandbytes library: `pip install bitsandbytes`."
-            )
-
     if optimizer_name == "adamw":
-        if use_torchao:
-            from torchao.prototype.low_bit_optim import AdamW4bit, AdamW8bit
-
-            optimizer_class = AdamW8bit if use_8bit else AdamW4bit if use_4bit else torch.optim.AdamW
-        else:
-            optimizer_class = bnb.optim.AdamW8bit if use_8bit else torch.optim.AdamW
+        optimizer_class = nn.optim.AdamWeightDecay
 
         init_kwargs = {
-            "betas": (beta1, beta2),
+            "learning_rate": learning_rate,
+            "beta1": beta1,
+            "beta2": beta2,
             "eps": epsilon,
             "weight_decay": weight_decay,
         }
 
     elif optimizer_name == "adam":
-        if use_torchao:
-            from torchao.prototype.low_bit_optim import Adam4bit, Adam8bit
-
-            optimizer_class = Adam8bit if use_8bit else Adam4bit if use_4bit else torch.optim.Adam
-        else:
-            optimizer_class = bnb.optim.Adam8bit if use_8bit else torch.optim.Adam
+        optimizer_class = nn.optim.Adam
 
         init_kwargs = {
-            "betas": (beta1, beta2),
+            "learning_rate": learning_rate,
+            "beta1": beta1,
+            "beta2": beta2,
             "eps": epsilon,
             "weight_decay": weight_decay,
         }
 
-    elif optimizer_name == "prodigy":
-        try:
-            import prodigyopt
-        except ImportError:
-            raise ImportError("To use Prodigy, please install the prodigyopt library: `pip install prodigyopt`")
-
-        optimizer_class = prodigyopt.Prodigy
-
-        if learning_rate <= 0.1:
-            logger.warning(
-                "Learning rate is too low. When using prodigy, it's generally better to set learning rate around 1.0"
-            )
-
-        init_kwargs = {
-            "lr": learning_rate,
-            "betas": (beta1, beta2),
-            "beta3": beta3,
-            "eps": epsilon,
-            "weight_decay": weight_decay,
-            "decouple": prodigy_decouple,
-            "use_bias_correction": prodigy_use_bias_correction,
-            "safeguard_warmup": prodigy_safeguard_warmup,
-        }
-
-    elif optimizer_name == "came":
-        try:
-            import came_pytorch
-        except ImportError:
-            raise ImportError("To use CAME, please install the came-pytorch library: `pip install came-pytorch`")
-
-        optimizer_class = came_pytorch.CAME
-
-        init_kwargs = {
-            "lr": learning_rate,
-            "eps": (1e-30, 1e-16),
-            "betas": (beta1, beta2, beta3),
-            "weight_decay": weight_decay,
-        }
-
-    if use_cpu_offload_optimizer:
-        from torchao.prototype.low_bit_optim import CPUOffloadOptimizer
-
-        if "fused" in inspect.signature(optimizer_class.__init__).parameters:
-            init_kwargs.update({"fused": True})
-
-        optimizer = CPUOffloadOptimizer(
-            params_to_optimize, optimizer_class=optimizer_class, offload_gradients=offload_gradients, **init_kwargs
-        )
-    else:
-        optimizer = optimizer_class(params_to_optimize, **init_kwargs)
+    optimizer = optimizer_class(params_to_optimize, **init_kwargs)
 
     return optimizer
-
-
-def get_gradient_norm(parameters):
-    norm = 0
-    for param in parameters:
-        if param.grad is None:
-            continue
-        local_norm = param.grad.detach().data.norm(2)
-        norm += local_norm.item() ** 2
-    norm = norm**0.5
-    return norm
 
 
 # Similar to diffusers.pipelines.hunyuandit.pipeline_hunyuandit.get_resize_crop_region_for_grid
@@ -199,10 +91,12 @@ def prepare_rotary_positional_embeddings(
     vae_scale_factor_spatial: int = 8,
     patch_size: int = 2,
     attention_head_dim: int = 64,
-    device: Optional[torch.device] = None,
     base_height: int = 480,
     base_width: int = 720,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Return numpy.ndarray for MindData, All computations are completed by numpy operators.
+    """
     grid_height = height // (vae_scale_factor_spatial * patch_size)
     grid_width = width // (vae_scale_factor_spatial * patch_size)
     base_size_width = base_width // (vae_scale_factor_spatial * patch_size)
@@ -216,28 +110,147 @@ def prepare_rotary_positional_embeddings(
         temporal_size=num_frames,
     )
 
-    freqs_cos = freqs_cos.to(device=device)
-    freqs_sin = freqs_sin.to(device=device)
     return freqs_cos, freqs_sin
 
 
-def reset_memory(device: Union[str, torch.device]) -> None:
-    gc.collect()
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats(device)
-    torch.cuda.reset_accumulated_memory_stats(device)
+# Adapted from diffusers.models.embeddings.get_3d_rotary_pos_embed
+def get_3d_rotary_pos_embed(
+    embed_dim, crops_coords, grid_size, temporal_size, theta: int = 10000, use_real: bool = True
+) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    """
+    RoPE for video tokens with 3D structure.
+
+    Args:
+    embed_dim: (`int`):
+        The embedding dimension size, corresponding to hidden_size_head.
+    crops_coords (`Tuple[int]`):
+        The top-left and bottom-right coordinates of the crop.
+    grid_size (`Tuple[int]`):
+        The grid size of the spatial positional embedding (height, width).
+    temporal_size (`int`):
+        The size of the temporal dimension.
+    theta (`float`):
+        Scaling factor for frequency computation.
+
+    Returns:
+        `np.ndarray`: positional embedding with shape `(temporal_size * grid_size[0] * grid_size[1], embed_dim/2)`.
+    """
+    if use_real is not True:
+        raise ValueError(" `use_real = False` is not currently supported for get_3d_rotary_pos_embed")
+    start, stop = crops_coords
+    grid_size_h, grid_size_w = grid_size
+    grid_h = np.linspace(start[0], stop[0], grid_size_h, endpoint=False, dtype=np.float32)
+    grid_w = np.linspace(start[1], stop[1], grid_size_w, endpoint=False, dtype=np.float32)
+    grid_t = np.linspace(0, temporal_size, temporal_size, endpoint=False, dtype=np.float32)
+
+    # Compute dimensions for each axis
+    dim_t = embed_dim // 4
+    dim_h = embed_dim // 8 * 3
+    dim_w = embed_dim // 8 * 3
+
+    # Temporal frequencies
+    freqs_t = get_1d_rotary_pos_embed(dim_t, grid_t, use_real=True)
+    # Spatial frequencies for height and width
+    freqs_h = get_1d_rotary_pos_embed(dim_h, grid_h, use_real=True)
+    freqs_w = get_1d_rotary_pos_embed(dim_w, grid_w, use_real=True)
+
+    # BroadCast and concatenate temporal and spaial frequencie (height and width) into a 3d ndarray
+    def combine_time_height_width(freqs_t, freqs_h, freqs_w):
+        freqs_t = np.broadcast_to(
+            freqs_t[:, None, None, :], (freqs_t.shape[0], grid_size_h, grid_size_w, freqs_t.shape[1])
+        )  # temporal_size, grid_size_h, grid_size_w, dim_t
+        freqs_h = np.broadcast_to(
+            freqs_h[None, :, None, :], (temporal_size, freqs_h.shape[0], grid_size_w, freqs_h.shape[1])
+        )  # temporal_size, grid_size_h, grid_size_2, dim_h
+        freqs_w = np.broadcast_to(
+            freqs_w[None, None, :, :], (temporal_size, grid_size_h, freqs_w.shape[0], freqs_w.shape[1])
+        )  # temporal_size, grid_size_h, grid_size_2, dim_w
+
+        freqs = np.concatenate(
+            [freqs_t, freqs_h, freqs_w], axis=-1
+        )  # temporal_size, grid_size_h, grid_size_w, (dim_t + dim_h + dim_w)
+        freqs = freqs.reshape(
+            temporal_size * grid_size_h * grid_size_w, -1
+        )  # (temporal_size * grid_size_h * grid_size_w), (dim_t + dim_h + dim_w)
+        return freqs
+
+    t_cos, t_sin = freqs_t  # both t_cos and t_sin has shape: temporal_size, dim_t
+    h_cos, h_sin = freqs_h  # both h_cos and h_sin has shape: grid_size_h, dim_h
+    w_cos, w_sin = freqs_w  # both w_cos and w_sin has shape: grid_size_w, dim_w
+    cos = combine_time_height_width(t_cos, h_cos, w_cos)
+    sin = combine_time_height_width(t_sin, h_sin, w_sin)
+    return cos, sin
 
 
-def print_memory(device: Union[str, torch.device]) -> None:
-    memory_allocated = torch.cuda.memory_allocated(device) / 1024**3
-    max_memory_allocated = torch.cuda.max_memory_allocated(device) / 1024**3
-    max_memory_reserved = torch.cuda.max_memory_reserved(device) / 1024**3
-    print(f"{memory_allocated=:.3f} GB")
-    print(f"{max_memory_allocated=:.3f} GB")
-    print(f"{max_memory_reserved=:.3f} GB")
+# Adapted from diffusers.models.embeddings.get_1d_rotary_pos_embed
+def get_1d_rotary_pos_embed(
+    dim: int,
+    pos: Union[np.ndarray, int],
+    theta: float = 10000.0,
+    use_real=False,
+    linear_factor=1.0,
+    ntk_factor=1.0,
+    repeat_interleave_real=True,
+    freqs_dtype=np.float32,  # numpy.float32, numpy.float64 (flux)
+):
+    r"""
+    Precompute the frequency ndarray for complex exponentials (cis) with given dimensions.
+
+    This function calculates a frequency ndarray with complex exponentials using the given dimension 'dim' and the end
+    index 'end'. The 'theta' parameter scales the frequencies. The returned ndarray contains complex values in complex64
+    data type.
+
+    Args:
+        dim (`int`): Dimension of the frequency ndarray.
+        pos (`np.ndarray` or `int`): Position indices for the frequency ndarray. [S] or scalar
+        theta (`float`, *optional*, defaults to 10000.0):
+            Scaling factor for frequency computation. Defaults to 10000.0.
+        use_real (`bool`, *optional*):
+            If True, return real part and imaginary part separately. Otherwise, return complex numbers.
+        linear_factor (`float`, *optional*, defaults to 1.0):
+            Scaling factor for the context extrapolation. Defaults to 1.0.
+        ntk_factor (`float`, *optional*, defaults to 1.0):
+            Scaling factor for the NTK-Aware RoPE. Defaults to 1.0.
+        repeat_interleave_real (`bool`, *optional*, defaults to `True`):
+            If `True` and `use_real`, real part and imaginary part are each interleaved with themselves to reach `dim`.
+            Otherwise, they are concateanted with themselves.
+        freqs_dtype (`numpy.float32` or `numpy.float64`, *optional*, defaults to `numpy.float32`):
+            the dtype of the frequency ndarray.
+    Returns:
+        `np.ndarray`: Precomputed frequency ndarray with complex exponentials. [S, D/2]
+    """
+    assert dim % 2 == 0
+
+    if isinstance(pos, int):
+        pos = np.arange(pos)
+
+    theta = theta * ntk_factor
+    freqs = 1.0 / (theta ** (np.arange(0, dim, 2, dtype=freqs_dtype)[: (dim // 2)] / dim)) / linear_factor  # [D/2]
+    freqs = np.outer(pos, freqs)  # type: ignore   # [S, D/2]
+    if use_real and repeat_interleave_real:
+        # flux, hunyuan-dit, cogvideox
+        freqs_cos = np.cos(freqs).repeat(2, axis=1).astype(np.float32)  # [S, D]
+        freqs_sin = np.sin(freqs).repeat(2, axis=1).astype(np.float32)  # [S, D]
+        return freqs_cos, freqs_sin
+    elif use_real:
+        # stable audio
+        freqs_cos = np.concatenate([np.cos(freqs), np.cos(freqs)], axis=-1).astype(np.float32)  # [S, D]
+        freqs_sin = np.concatenate([np.sin(freqs), np.sin(freqs)], axis=-1).astype(np.float32)  # [S, D]
+        return freqs_cos, freqs_sin
+    else:
+        raise NotImplementedError("'use_real' in `get_1d_rotary_pos_embed` must be True.")
 
 
-def unwrap_model(accelerator: Accelerator, model):
-    model = accelerator.unwrap_model(model)
-    model = model._orig_mod if is_compiled_module(model) else model
-    return model
+# Adapted from (THUMD/CogVideo) cogvideo.sat.data_video.pad_last_frame
+def pad_last_frame(array: np.ndarray, num_frames: int):
+    # T, H, W, C
+    if len(array) < num_frames:
+        pad_length = num_frames - len(array)
+        # Use the last frame to pad instead of zero
+        last_frame = array[-1]
+        pad_array = np.expand_dims(last_frame, axis=0)
+        pad_array = np.broadcast_to(pad_array, shape=(pad_length,) + array.shape[1:])
+        padded_array = np.concatenate([array, pad_array], axis=0)
+        return padded_array
+    else:
+        return array[:num_frames]

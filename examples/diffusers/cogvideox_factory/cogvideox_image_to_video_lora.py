@@ -29,12 +29,7 @@ import transformers
 import wandb
 from accelerate import Accelerator, DistributedType
 from accelerate.logging import get_logger
-from accelerate.utils import (
-    DistributedDataParallelKwargs,
-    InitProcessGroupKwargs,
-    ProjectConfiguration,
-    set_seed,
-)
+from accelerate.utils import DistributedDataParallelKwargs, InitProcessGroupKwargs, ProjectConfiguration, set_seed
 from diffusers import (
     AutoencoderKLCogVideoX,
     CogVideoXDPMScheduler,
@@ -51,11 +46,6 @@ from peft import LoraConfig, get_peft_model_state_dict, set_peft_model_state_dic
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, T5EncoderModel
-
-
-from args import get_args  # isort:skip
-from dataset import BucketSampler, VideoDatasetWithResizing, VideoDatasetWithResizeAndRectangleCrop  # isort:skip
-from text_encoder import compute_prompt_embeddings  # isort:skip
 from utils import (
     get_gradient_norm,
     get_optimizer,
@@ -64,6 +54,10 @@ from utils import (
     reset_memory,
     unwrap_model,
 )
+
+from args import get_args  # isort:skip
+from dataset import BucketSampler, VideoDatasetWithResizing, VideoDatasetWithResizeAndRectangleCrop  # isort:skip
+from text_encoder import compute_prompt_embeddings  # isort:skip
 
 
 logger = get_logger(__name__)
@@ -97,7 +91,7 @@ def save_model_card(
 
 This is a lora finetune of the CogVideoX model `{base_model}`.
 
-The model was trained using [CogVideoX Factory](https://github.com/a-r-r-o-w/cogvideox-factory) - a repository containing memory-optimized training scripts for the CogVideoX family of models using [TorchAO](https://github.com/pytorch/ao) and [DeepSpeed](https://github.com/microsoft/DeepSpeed). The scripts were adopted from [CogVideoX Diffusers trainer](https://github.com/huggingface/diffusers/blob/main/examples/cogvideo/train_cogvideox_lora.py).
+The model was trained using [CogVideoX Factory](https://github.com/a-r-r-o-w/cogvideox-factory) - a repository containing memory-optimized training scripts for the CogVideoX family of models using [TorchAO](https://github.com/pytorch/ao) and [DeepSpeed](https://github.com/microsoft/DeepSpeed). The scripts were adopted from [CogVideoX Diffusers trainer](https://github.com/huggingface/diffusers/blob/main/examples/cogvideo/train_cogvideox_lora.py).  # noqa: E501
 
 ## Download model
 
