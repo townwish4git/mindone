@@ -6,6 +6,8 @@ from mindspore import nn
 
 from mindone.diffusers.utils.logging import get_logger
 
+from .auto_mixed_precison import auto_mixed_precision_rewrite
+
 logger = get_logger(__name__)
 
 

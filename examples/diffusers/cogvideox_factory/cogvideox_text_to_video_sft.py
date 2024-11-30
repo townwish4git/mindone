@@ -29,7 +29,6 @@ from transformers import AutoTokenizer
 
 import mindspore as ms
 from mindspore import nn, ops
-from mindspore.amp import auto_mixed_precision
 from mindspore.dataset import GeneratorDataset
 
 from mindone.diffusers import (
@@ -54,10 +53,9 @@ from mindone.diffusers.utils.logging import get_logger
 from mindone.trainers.zero import TrainOneStepWrapper, prepare_train_network
 from mindone.transformers import T5EncoderModel
 
-from utils import get_optimizer  # isort:skip
-
 from args import get_args  # isort:skip
 from dataset import VideoDatasetWithResizing, VideoDatasetWithResizeAndRectangleCrop  # isort:skip
+from utils import auto_mixed_precision_rewrite, get_optimizer  # isort:skip
 
 
 logger = get_logger(__name__)
@@ -337,9 +335,8 @@ def main(args):
     # Make sure the trainable params are in float32.
     # MindSpore Optimizers only allow float32, params with any other dtype should be converted
     if args.mixed_precision in ("fp16", "bf16"):
-        # only upcast trainable parameters (LoRA) into fp32
-        cast_training_params([transformer], dtype=ms.float32)
-        transformer = auto_mixed_precision(transformer, amp_level=args.amp_level, dtype=weight_dtype)
+        # Keep model dtype float16/bfloat but upcast submodules in WHITE_LIST to float32 to avoid overflowing
+        transformer = auto_mixed_precision_rewrite(transformer, model_dtype=weight_dtype, amp_dtype=ms.float32)
 
     # Optimization parameters
     # Do Not define grouped learning rate here since it is not used but results in Call Depth Overflow failure
@@ -619,7 +616,7 @@ class TrainStepForCogVideo(nn.Cell):
         self,
         vae: Optional[nn.Cell],
         vae_config: Optional[ConfigMixin],
-        text_encoder: nn.Cell,
+        text_encoder: Optional[nn.Cell],
         transformer: nn.Cell,
         scheduler: SchedulerMixin,
         weight_dtype: ms.Type,
