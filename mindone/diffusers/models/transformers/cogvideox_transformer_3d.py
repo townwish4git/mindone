@@ -66,6 +66,7 @@ class CogVideoXBlock(nn.Cell):
             Whether or not to use bias in Attention output projection layer.
     """
 
+    @ms.lazy_inline
     def __init__(
         self,
         dim: int,
