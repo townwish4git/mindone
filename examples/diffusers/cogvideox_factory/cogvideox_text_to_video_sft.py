@@ -285,6 +285,7 @@ def main(args):
         "use_rotary_positional_embeddings": transformer_config.use_rotary_positional_embeddings,
         "vae_scale_factor_spatial": 2 ** (len(vae_config.block_out_channels) - 1),
         "patch_size": transformer_config.patch_size,
+        "patch_size_t": transformer_config.patch_size_t if hasattr(transformer_config, "patch_size_t") else None,
         "attention_head_dim": transformer_config.attention_head_dim,
     }
     if args.video_reshape_mode is None:

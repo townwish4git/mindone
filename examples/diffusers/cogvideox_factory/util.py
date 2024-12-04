@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 
@@ -125,6 +125,7 @@ def prepare_rotary_positional_embeddings(
     num_frames: int,
     vae_scale_factor_spatial: int = 8,
     patch_size: int = 2,
+    patch_size_t: int = None,
     attention_head_dim: int = 64,
     base_height: int = 480,
     base_width: int = 720,
@@ -136,21 +137,42 @@ def prepare_rotary_positional_embeddings(
     grid_width = width // (vae_scale_factor_spatial * patch_size)
     base_size_width = base_width // (vae_scale_factor_spatial * patch_size)
     base_size_height = base_height // (vae_scale_factor_spatial * patch_size)
-
-    grid_crops_coords = get_resize_crop_region_for_grid((grid_height, grid_width), base_size_width, base_size_height)
-    freqs_cos, freqs_sin = get_3d_rotary_pos_embed(
-        embed_dim=attention_head_dim,
-        crops_coords=grid_crops_coords,
-        grid_size=(grid_height, grid_width),
-        temporal_size=num_frames,
-    )
+    if patch_size_t is None:
+        # CogVideoX 1.0
+        grid_crops_coords = get_resize_crop_region_for_grid(
+            (grid_height, grid_width), base_size_width, base_size_height
+        )
+        freqs_cos, freqs_sin = get_3d_rotary_pos_embed(
+            embed_dim=attention_head_dim,
+            crops_coords=grid_crops_coords,
+            grid_size=(grid_height, grid_width),
+            temporal_size=num_frames,
+        )
+    else:
+        # CogVideoX 1.5
+        base_num_frames = (num_frames + patch_size_t - 1) // patch_size_t
+        freqs_cos, freqs_sin = get_3d_rotary_pos_embed(
+            embed_dim=attention_head_dim,
+            crops_coords=None,
+            grid_size=(grid_height, grid_width),
+            temporal_size=base_num_frames,
+            grid_type="slice",
+            max_size=(base_size_height, base_size_width),
+        )
 
     return freqs_cos, freqs_sin
 
 
 # Adapted from diffusers.models.embeddings.get_3d_rotary_pos_embed
 def get_3d_rotary_pos_embed(
-    embed_dim, crops_coords, grid_size, temporal_size, theta: int = 10000, use_real: bool = True
+    embed_dim,
+    crops_coords,
+    grid_size,
+    temporal_size,
+    theta: int = 10000,
+    use_real: bool = True,
+    grid_type: str = "linspace",
+    max_size: Optional[Tuple[int, int]] = None,
 ) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     """
     RoPE for video tokens with 3D structure.
@@ -166,17 +188,30 @@ def get_3d_rotary_pos_embed(
         The size of the temporal dimension.
     theta (`float`):
         Scaling factor for frequency computation.
+    grid_type (`str`):
+        Whether to use "linspace" or "slice" to compute grids.
 
     Returns:
         `np.ndarray`: positional embedding with shape `(temporal_size * grid_size[0] * grid_size[1], embed_dim/2)`.
     """
+
     if use_real is not True:
         raise ValueError(" `use_real = False` is not currently supported for get_3d_rotary_pos_embed")
-    start, stop = crops_coords
-    grid_size_h, grid_size_w = grid_size
-    grid_h = np.linspace(start[0], stop[0], grid_size_h, endpoint=False, dtype=np.float32)
-    grid_w = np.linspace(start[1], stop[1], grid_size_w, endpoint=False, dtype=np.float32)
-    grid_t = np.linspace(0, temporal_size, temporal_size, endpoint=False, dtype=np.float32)
+
+    if grid_type == "linspace":
+        start, stop = crops_coords
+        grid_size_h, grid_size_w = grid_size
+        grid_h = np.linspace(start[0], stop[0], grid_size_h, endpoint=False, dtype=np.float32)
+        grid_w = np.linspace(start[1], stop[1], grid_size_w, endpoint=False, dtype=np.float32)
+        grid_t = np.linspace(0, temporal_size, temporal_size, endpoint=False, dtype=np.float32)
+    elif grid_type == "slice":
+        max_h, max_w = max_size
+        grid_size_h, grid_size_w = grid_size
+        grid_h = np.arange(max_h, dtype=np.float32)
+        grid_w = np.arange(max_w, dtype=np.float32)
+        grid_t = np.arange(temporal_size, dtype=np.float32)
+    else:
+        raise ValueError("Invalid value passed for `grid_type`.")
 
     # Compute dimensions for each axis
     dim_t = embed_dim // 4
@@ -212,6 +247,12 @@ def get_3d_rotary_pos_embed(
     t_cos, t_sin = freqs_t  # both t_cos and t_sin has shape: temporal_size, dim_t
     h_cos, h_sin = freqs_h  # both h_cos and h_sin has shape: grid_size_h, dim_h
     w_cos, w_sin = freqs_w  # both w_cos and w_sin has shape: grid_size_w, dim_w
+
+    if grid_type == "slice":
+        t_cos, t_sin = t_cos[:temporal_size], t_sin[:temporal_size]
+        h_cos, h_sin = h_cos[:grid_size_h], h_sin[:grid_size_h]
+        w_cos, w_sin = w_cos[:grid_size_w], w_sin[:grid_size_w]
+
     cos = combine_time_height_width(t_cos, h_cos, w_cos)
     sin = combine_time_height_width(t_sin, h_sin, w_sin)
     return cos, sin

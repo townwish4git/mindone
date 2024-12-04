@@ -52,6 +52,7 @@ class VideoDataset(object):
         use_rotary_positional_embeddings: bool = False,
         vae_scale_factor_spatial: Optional[int] = None,
         patch_size: Optional[int] = None,
+        patch_size_t: Optional[int] = None,
         attention_head_dim: Optional[int] = None,
     ) -> None:
         super().__init__()
@@ -77,6 +78,7 @@ class VideoDataset(object):
         self.use_rotary_positional_embeddings = use_rotary_positional_embeddings
         self.vae_scale_factor_spatial = vae_scale_factor_spatial
         self.patch_size = patch_size
+        self.patch_size_t = patch_size_t
         self.attention_head_dim = attention_head_dim
 
         self.resolutions = [
@@ -312,6 +314,7 @@ class VideoDataset(object):
                 num_frames=int(num_frames),
                 vae_scale_factor_spatial=self.vae_scale_factor_spatial,
                 patch_size=self.patch_size,
+                patch_size_t=self.patch_size_t,
                 attention_head_dim=self.attention_head_dim,
             )
             if self.use_rotary_positional_embeddings
