@@ -178,7 +178,6 @@ def main(args):
         revision=args.revision,
         variant=args.variant,
     )
-    set_params_requires_grad(transformer, True)
 
     text_encoder, vae = None, None
     if not args.load_tensors:
