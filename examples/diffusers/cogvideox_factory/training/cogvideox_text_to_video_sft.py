@@ -267,6 +267,8 @@ def main(args):
         revision=args.revision,
     )
 
+    VAE_SCALE_FACTOR_SPATIAL = 2 ** (len(vae_config.block_out_channels) - 1)
+
     dataset_init_kwargs = {
         "data_root": args.data_root,
         "dataset_file": args.dataset_file,
@@ -282,10 +284,12 @@ def main(args):
         "tokenizer": None if args.load_tensors else tokenizer,
         "max_sequence_length": None if args.load_tensors else transformer_config.max_text_seq_length,
         "use_rotary_positional_embeddings": transformer_config.use_rotary_positional_embeddings,
-        "vae_scale_factor_spatial": 2 ** (len(vae_config.block_out_channels) - 1),
+        "vae_scale_factor_spatial": VAE_SCALE_FACTOR_SPATIAL,
         "patch_size": transformer_config.patch_size,
         "patch_size_t": transformer_config.patch_size_t if hasattr(transformer_config, "patch_size_t") else None,
         "attention_head_dim": transformer_config.attention_head_dim,
+        "base_height": transformer_config.sample_height * VAE_SCALE_FACTOR_SPATIAL,
+        "base_width": transformer_config.sample_width * VAE_SCALE_FACTOR_SPATIAL,
     }
     if args.video_reshape_mode is None:
         train_dataset = VideoDatasetWithResizing(**dataset_init_kwargs)

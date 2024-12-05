@@ -54,6 +54,8 @@ class VideoDataset(object):
         patch_size: Optional[int] = None,
         patch_size_t: Optional[int] = None,
         attention_head_dim: Optional[int] = None,
+        base_height: int = 480,
+        base_width: int = 720,
     ) -> None:
         super().__init__()
 
@@ -80,6 +82,8 @@ class VideoDataset(object):
         self.patch_size = patch_size
         self.patch_size_t = patch_size_t
         self.attention_head_dim = attention_head_dim
+        self.base_height = base_height
+        self.base_width = base_width
 
         self.resolutions = [
             (f, h, w) for h in self.height_buckets for w in self.width_buckets for f in self.frame_buckets
@@ -316,6 +320,8 @@ class VideoDataset(object):
                 patch_size=self.patch_size,
                 patch_size_t=self.patch_size_t,
                 attention_head_dim=self.attention_head_dim,
+                base_height=self.base_height,
+                base_width=self.base_width,
             )
             if self.use_rotary_positional_embeddings
             else None
