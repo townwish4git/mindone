@@ -89,7 +89,6 @@ class VideoDataset(object):
             (f, h, w) for h in self.height_buckets for w in self.width_buckets for f in self.frame_buckets
         ]
         # We prepare RoPE in dataset
-        self.ropes = {}
         self.prepare_ropes()
 
         # Two methods of loading data are supported.
@@ -171,7 +170,7 @@ class VideoDataset(object):
                     "height": height,
                     "width": width,
                 },
-                "rotary_positional_embeddings": self.ropes[f"{num_frames}-{height}-{width}"],
+                "rotary_positional_embeddings": self.ropes,
             }
         else:
             image, video, _ = self._preprocess_video(self.video_paths[index])
@@ -197,7 +196,7 @@ class VideoDataset(object):
                     "height": video.shape[2],
                     "width": video.shape[3],
                 },
-                "rotary_positional_embeddings": self.ropes[f"{video.shape[0]}-{video.shape[2]}-{video.shape[3]}"],
+                "rotary_positional_embeddings": self.ropes,
             }
 
     def _load_dataset_from_local_path(self) -> Tuple[List[str], List[str]]:
@@ -308,8 +307,11 @@ class VideoDataset(object):
         return images, latents, embeds
 
     def prepare_ropes(self):
-        for f, h, w in self.resolutions:
-            num_frames = (f - f % 2) / 4 + f % 2
+        if len(self.resolutions) != 1:
+            raise NotImplementedError("Only support fixed frame and resolution now")
+
+        f, h, w = self.resolutions[0]
+        num_frames = (f - f % 2) / 4 + f % 2
 
         image_rotary_emb = (
             prepare_rotary_positional_embeddings(
@@ -327,7 +329,7 @@ class VideoDataset(object):
             else None
         )
 
-        self.ropes[f"{int(f)}-{int(h)}-{int(w)}"] = image_rotary_emb
+        self.ropes = image_rotary_emb
 
 
 class VideoDatasetWithResizing(VideoDataset):

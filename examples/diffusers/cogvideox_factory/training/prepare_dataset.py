@@ -498,6 +498,9 @@ def main():
             print("-------------------------")
 
     # 5. Complete distributed processing
+    if args.world_size > 1:
+        ops.Barrier()()
+
     output_queue.put(None)
     save_thread.shutdown(wait=True)
     save_future.result()
