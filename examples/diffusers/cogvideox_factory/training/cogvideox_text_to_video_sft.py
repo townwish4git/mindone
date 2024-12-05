@@ -39,7 +39,6 @@ from mindone.diffusers import (
     ConfigMixin,
     SchedulerMixin,
 )
-from mindone.diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
 from mindone.diffusers.optimization import get_scheduler
 from mindone.diffusers.training_utils import (
     AttrJitWrapper,
@@ -632,7 +631,6 @@ class TrainStepForCogVideo(nn.Cell):
         vae_config = vae_config or vae.config
 
         self.weight_dtype = weight_dtype
-        self.latent_dist = DiagonalGaussianDistribution()
         self.vae = vae
         self.vae_dtype = None if vae is None else vae.dtype
         self.vae_scaling_factor = vae_config.scaling_factor
@@ -661,13 +659,23 @@ class TrainStepForCogVideo(nn.Cell):
 
         return prompt_embeds
 
+    def diagonal_gaussian_distribution_sample(self, latent_dist: ms.Tensor) -> ms.Tensor:
+        mean, logvar = ops.chunk(latent_dist, 2, axis=1)
+        logvar = ops.clamp(logvar, -30.0, 20.0)
+        std = ops.exp(0.5 * logvar)
+
+        sample = ops.randn_like(mean, dtype=mean.dtype)
+        x = mean + std * sample
+
+        return x
+
     def construct(self, videos, text_input_ids_or_prompt_embeds, image_rotary_emb=None):
         # Encode videos
         if not self.args.load_tensors:
             videos = videos.permute(0, 2, 1, 3, 4).to(self.vae_dtype)  # [B, C, F, H, W]
             videos = self.vae.encode(videos)[0]
 
-        videos = self.latent_dist.sample(videos) * self.vae_scaling_factor
+        videos = self.diagonal_gaussian_distribution_sample(videos) * self.vae_scaling_factor
         videos = videos.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
         videos = videos.to(dtype=self.weight_dtype)
         model_input = videos

@@ -357,6 +357,24 @@ def main():
             video_reshape_mode=args.video_reshape_mode, **dataset_init_kwargs
         )
 
+    original_dataset_size = len(dataset)
+
+    # Split data among GPUs
+    if args.world_size > 1:
+        samples_per_gpu = original_dataset_size // args.world_size
+        start_index = args.rank * samples_per_gpu
+        end_index = start_index + samples_per_gpu
+        if args.rank == args.world_size - 1:
+            end_index = original_dataset_size  # Make sure the last GPU gets the remaining data
+
+        # Slice the data
+        dataset.prompts = dataset.prompts[start_index:end_index]
+        dataset.video_paths = dataset.video_paths[start_index:end_index]
+    else:
+        pass
+
+    rank_dataset_size = len(dataset)
+
     # 3. Dataloader
     def collate_fn(data):
         prompts = [x["prompt"] for x in data]
@@ -378,8 +396,6 @@ def main():
     dataloader = GeneratorDataset(
         dataset,
         column_names=["examples"],
-        shard_id=args.rank,
-        num_shards=args.world_size,
         num_parallel_workers=args.dataloader_num_workers,
     ).batch(
         batch_size=1,
@@ -392,11 +408,12 @@ def main():
     dataloader_iter = dataloader.create_tuple_iterator()
 
     # 4. Compute latents and embeddings and save
-    iterator = tqdm(
-        dataloader_iter,
-        desc="Encoding",
-        disable=not is_master(args),
-    )
+    if args.rank == 0:
+        iterator = tqdm(
+            dataloader_iter, desc="Encoding", total=(rank_dataset_size + args.batch_size - 1) // args.batch_size
+        )
+    else:
+        iterator = dataloader_iter
 
     for step, batch in enumerate(iterator):
         try:
@@ -422,7 +439,7 @@ def main():
                     if args.save_image_latents:
                         encoded_slices = [vae._encode(image_slice) for image_slice in images.split(1)]
                         image_latents = ops.cat(encoded_slices)
-                        image_latents = image_latents.to(dtype=weight_dtype).asnumpy()
+                        image_latents = image_latents.to(dtype=weight_dtype).float().asnumpy()
 
                     encoded_slices = [vae._encode(video_slice) for video_slice in videos.split(1)]
                     video_latents = ops.cat(encoded_slices)
@@ -430,18 +447,22 @@ def main():
                 else:
                     if args.save_image_latents:
                         image_latents = vae._encode(images)
-                        image_latents = image_latents.to(dtype=weight_dtype).asnumpy()
+                        image_latents = image_latents.to(dtype=weight_dtype).float().asnumpy()
 
                     video_latents = vae._encode(videos)
 
-                video_latents = video_latents.to(dtype=weight_dtype).asnumpy()
+                video_latents = video_latents.to(dtype=weight_dtype).float().asnumpy()
 
                 # Encode prompts
-                prompt_embeds = compute_prompt_embeddings(
-                    text_encoder,
-                    text_input_ids,
-                    dtype=weight_dtype,
-                ).asnumpy()
+                prompt_embeds = (
+                    compute_prompt_embeddings(
+                        text_encoder,
+                        text_input_ids,
+                        dtype=weight_dtype,
+                    )
+                    .float()
+                    .asnumpy()
+                )
 
             if images is not None:
                 images = (images.permute(0, 2, 3, 4, 1) + 1) / 2 * 255  # [B, F, H, W, C]
