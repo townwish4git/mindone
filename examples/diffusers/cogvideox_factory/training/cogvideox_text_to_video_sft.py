@@ -30,6 +30,7 @@ from transformers import AutoTokenizer
 import mindspore as ms
 from mindspore import nn, ops
 from mindspore.dataset import GeneratorDataset
+from mindspore.nn.wrap.loss_scale import DynamicLossScaleUpdateCell
 
 from mindone.diffusers import (
     AutoencoderKLCogVideoX,
@@ -376,7 +377,7 @@ def main(args):
         use_rotary_positional_embeddings=transformer_config.use_rotary_positional_embeddings,
     ).set_train(True)
 
-    loss_scaler = nn.FixedLossScaleUpdateCell(4096)
+    loss_scaler = DynamicLossScaleUpdateCell(loss_scale_value=65536.0, scale_factor=2, scale_window=2000)
 
     if args.zero_stage != 0:
         train_step = prepare_train_network(
@@ -403,14 +404,14 @@ def main(args):
     if is_master(args):
         with open(logging_dir / "hparams.yml", "w") as f:
             yaml.dump(vars(args), f, indent=4)
-            trackers = dict()
-        for tracker_name in args.report_to.split(","):
-            if tracker_name == "tensorboard":
-                trackers[tracker_name] = SummaryWriter(str(logging_dir), write_to_disk=is_master(args))
-            else:
-                logger.warning(f"Tracker {tracker_name} is not implemented, omitting...")
+    trackers = dict()
+    for tracker_name in args.report_to.split(","):
+        if tracker_name == "tensorboard":
+            trackers[tracker_name] = SummaryWriter(str(logging_dir), write_to_disk=is_master(args))
+        else:
+            logger.warning(f"Tracker {tracker_name} is not implemented, omitting...")
 
-        tracker_name = args.tracker_name or "cogvideox-sft"
+    tracker_name = args.tracker_name or "cogvideox-sft"
 
     # Train!
     total_batch_size = args.train_batch_size * args.world_size * args.gradient_accumulation_steps
@@ -472,8 +473,9 @@ def main(args):
             loss, _, _ = train_step(*batch)
 
             # Checks if the accelerator has performed an optimization step behind the scenes
-            progress_bar.update(1)
-            global_step += 1
+            if train_step.accum_steps == 1 or train_step.cur_accum_step.item() == 0:
+                progress_bar.update(1)
+                global_step += 1
 
             if is_master(args):
                 if global_step % args.checkpointing_steps == 0:
