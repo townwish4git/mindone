@@ -29,8 +29,8 @@ from transformers import AutoTokenizer
 
 import mindspore as ms
 from mindspore import nn, ops
-from mindspore.amp import StaticLossScaler, auto_mixed_precision
 from mindspore.dataset import GeneratorDataset
+from mindspore.nn.wrap.loss_scale import DynamicLossScaleUpdateCell
 
 from mindone.diffusers import (
     AutoencoderKLCogVideoX,
@@ -41,11 +41,9 @@ from mindone.diffusers import (
     SchedulerMixin,
 )
 from mindone.diffusers._peft import LoraConfig, get_peft_model_state_dict, set_peft_model_state_dict
-from mindone.diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
 from mindone.diffusers.optimization import get_scheduler
 from mindone.diffusers.training_utils import (
     AttrJitWrapper,
-    TrainStep,
     cast_training_params,
     init_distributed_device,
     is_master,
@@ -53,12 +51,12 @@ from mindone.diffusers.training_utils import (
 )
 from mindone.diffusers.utils import convert_unet_state_dict_to_peft, export_to_video
 from mindone.diffusers.utils.logging import get_logger
+from mindone.trainers.zero import TrainOneStepWrapper, prepare_train_network
 from mindone.transformers import T5EncoderModel
-
-from utils import get_optimizer  # isort:skip
 
 from args import get_args  # isort:skip
 from dataset import VideoDatasetWithResizing, VideoDatasetWithResizeAndRectangleCrop  # isort:skip
+from utils import auto_mixed_precision_rewrite, get_optimizer  # isort:skip
 
 
 logger = get_logger(__name__)
@@ -181,7 +179,6 @@ def main(args):
         revision=args.revision,
         variant=args.variant,
     )
-    # We only train the additional adapter LoRA layers
     set_params_requires_grad(transformer, False)
 
     text_encoder, vae = None, None
@@ -228,7 +225,7 @@ def main(args):
 
     # now we will add new LoRA weights to the attention layers
     transformer_lora_config = LoraConfig(
-        r=args.rank,
+        r=args.lora_rank,
         lora_alpha=args.lora_alpha,
         init_lora_weights=True,
         target_modules=["to_k", "to_q", "to_v", "to_out.0"],
@@ -236,7 +233,7 @@ def main(args):
     transformer.add_adapter(transformer_lora_config)
 
     # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
-    def save_model_hook(models, weights, output_dir):
+    def save_model_hook(models, output_dir):
         if is_master(args):
             transformer_lora_layers_to_save = None
 
@@ -244,7 +241,7 @@ def main(args):
                 if isinstance(model, CogVideoXTransformer3DModel):
                     transformer_lora_layers_to_save = get_peft_model_state_dict(model)
                 else:
-                    raise ValueError(f"unexpected save model: {model.__class__}")
+                    raise ValueError(f"Unexpected save model: {model.__class__}")
 
             CogVideoXPipeline.save_lora_weights(
                 output_dir,
@@ -298,6 +295,8 @@ def main(args):
         revision=args.revision,
     )
 
+    VAE_SCALE_FACTOR_SPATIAL = 2 ** (len(vae_config.block_out_channels) - 1)
+
     dataset_init_kwargs = {
         "data_root": args.data_root,
         "dataset_file": args.dataset_file,
@@ -313,9 +312,12 @@ def main(args):
         "tokenizer": None if args.load_tensors else tokenizer,
         "max_sequence_length": None if args.load_tensors else transformer_config.max_text_seq_length,
         "use_rotary_positional_embeddings": transformer_config.use_rotary_positional_embeddings,
-        "vae_scale_factor_spatial": 2 ** (len(vae_config.block_out_channels) - 1),
+        "vae_scale_factor_spatial": VAE_SCALE_FACTOR_SPATIAL,
         "patch_size": transformer_config.patch_size,
+        "patch_size_t": transformer_config.patch_size_t if hasattr(transformer_config, "patch_size_t") else None,
         "attention_head_dim": transformer_config.attention_head_dim,
+        "base_height": transformer_config.sample_height * VAE_SCALE_FACTOR_SPATIAL,
+        "base_width": transformer_config.sample_width * VAE_SCALE_FACTOR_SPATIAL,
     }
     if args.video_reshape_mode is None:
         train_dataset = VideoDatasetWithResizing(**dataset_init_kwargs)
@@ -365,9 +367,8 @@ def main(args):
     # Make sure the trainable params are in float32.
     # MindSpore Optimizers only allow float32, params with any other dtype should be converted
     if args.mixed_precision in ("fp16", "bf16"):
-        # only upcast trainable parameters (LoRA) into fp32
-        cast_training_params([transformer], dtype=ms.float32)
-        transformer = auto_mixed_precision(transformer, amp_level=args.amp_level, dtype=weight_dtype)
+        # Keep model dtype float16/bfloat but upcast submodules in WHITE_LIST to float32 to avoid overflowing
+        transformer = auto_mixed_precision_rewrite(transformer, model_dtype=weight_dtype, amp_dtype=ms.float32)
 
     # Optimization parameters
     # Do Not define grouped learning rate here since it is not used but results in Call Depth Overflow failure
@@ -383,7 +384,6 @@ def main(args):
         beta2=args.beta2,
         epsilon=args.epsilon,
         weight_decay=args.weight_decay,
-        use_zero=args.use_zero,
     )
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
@@ -393,19 +393,53 @@ def main(args):
     # Afterwards we recalculate our number of training epochs
     args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
+    # create train_step for training
+    train_step = TrainStepForCogVideo(
+        vae=vae,
+        vae_config=vae_config,
+        text_encoder=text_encoder,
+        transformer=transformer,
+        scheduler=scheduler,
+        weight_dtype=weight_dtype,
+        args=args,
+        use_rotary_positional_embeddings=transformer_config.use_rotary_positional_embeddings,
+    ).set_train(True)
+
+    loss_scaler = DynamicLossScaleUpdateCell(loss_scale_value=65536.0, scale_factor=2, scale_window=2000)
+
+    if args.zero_stage != 0:
+        train_step = prepare_train_network(
+            train_step,
+            optimizer=optimizer,
+            scale_sense=loss_scaler,
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
+            clip_grad=True,
+            clip_norm=args.max_grad_norm,
+            zero_stage=args.zero_stage,
+        )
+    else:
+        train_step = TrainOneStepWrapper(
+            train_step,
+            optimizer=optimizer,
+            scale_sense=loss_scaler,
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
+            clip_grad=True,
+            clip_norm=args.max_grad_norm,
+        )
+
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if is_master(args):
         with open(logging_dir / "hparams.yml", "w") as f:
             yaml.dump(vars(args), f, indent=4)
-            trackers = dict()
-        for tracker_name in args.report_to.split(","):
-            if tracker_name == "tensorboard":
-                trackers[tracker_name] = SummaryWriter(str(logging_dir), write_to_disk=is_master(args))
-            else:
-                logger.warning(f"Tracker {tracker_name} is not implemented, omitting...")
+    trackers = dict()
+    for tracker_name in args.report_to.split(","):
+        if tracker_name == "tensorboard":
+            trackers[tracker_name] = SummaryWriter(str(logging_dir), write_to_disk=is_master(args))
+        else:
+            logger.warning(f"Tracker {tracker_name} is not implemented, omitting...")
 
-        tracker_name = args.tracker_name or "cogvideox-lora"
+    tracker_name = args.tracker_name or "cogvideox-lora"
 
     # Train!
     total_batch_size = args.train_batch_size * args.world_size * args.gradient_accumulation_steps
@@ -450,20 +484,6 @@ def main(args):
             initial_global_step = global_step
             first_epoch = global_step // num_update_steps_per_epoch
 
-    # create train_step for training
-    train_step = TrainStepForCogVideo(
-        vae=vae,
-        vae_config=vae_config,
-        text_encoder=text_encoder,
-        transformer=transformer,
-        optimizer=optimizer,
-        scheduler=scheduler,
-        weight_dtype=weight_dtype,
-        length_of_dataloader=len(train_dataloader),
-        args=args,
-        use_rotary_positional_embeddings=transformer_config.use_rotary_positional_embeddings,
-    ).set_train(True)
-
     progress_bar = tqdm(
         range(0, args.max_train_steps),
         initial=initial_global_step,
@@ -478,45 +498,48 @@ def main(args):
         transformer.set_train(True)
 
         for step, batch in enumerate(train_dataloader_iter):
-            loss, model_pred = train_step(*batch)
+            loss, _, _ = train_step(*batch)
 
             # Checks if the accelerator has performed an optimization step behind the scenes
-            if train_step.sync_gradients:
+            if train_step.accum_steps == 1 or train_step.cur_accum_step.item() == 0:
                 progress_bar.update(1)
                 global_step += 1
 
-                if is_master(args):
-                    if global_step % args.checkpointing_steps == 0:
-                        # _before_ saving state, check if this save would set us over the `checkpoints_total_limit`
-                        if args.checkpoints_total_limit is not None:
-                            checkpoints = os.listdir(args.output_dir)
-                            checkpoints = [d for d in checkpoints if d.startswith("checkpoint")]
-                            checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
+            if is_master(args):
+                if global_step % args.checkpointing_steps == 0:
+                    # _before_ saving state, check if this save would set us over the `checkpoints_total_limit`
+                    if args.checkpoints_total_limit is not None:
+                        checkpoints = os.listdir(args.output_dir)
+                        checkpoints = [d for d in checkpoints if d.startswith("checkpoint")]
+                        checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
 
-                            # before we save the new checkpoint, we need to have at _most_ `checkpoints_total_limit - 1` checkpoints
-                            if len(checkpoints) >= args.checkpoints_total_limit:
-                                num_to_remove = len(checkpoints) - args.checkpoints_total_limit + 1
-                                removing_checkpoints = checkpoints[0:num_to_remove]
+                        # before we save the new checkpoint, we need to have at _most_ `checkpoints_total_limit - 1` checkpoints
+                        if len(checkpoints) >= args.checkpoints_total_limit:
+                            num_to_remove = len(checkpoints) - args.checkpoints_total_limit + 1
+                            removing_checkpoints = checkpoints[0:num_to_remove]
 
-                                logger.info(
-                                    f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
-                                )
-                                logger.info(f"Removing checkpoints: {', '.join(removing_checkpoints)}")
+                            logger.info(
+                                f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
+                            )
+                            logger.info(f"Removing checkpoints: {', '.join(removing_checkpoints)}")
 
-                                for removing_checkpoint in removing_checkpoints:
-                                    removing_checkpoint = os.path.join(args.output_dir, removing_checkpoint)
-                                    shutil.rmtree(removing_checkpoint)
+                            for removing_checkpoint in removing_checkpoints:
+                                removing_checkpoint = os.path.join(args.output_dir, removing_checkpoint)
+                                shutil.rmtree(removing_checkpoint)
 
-                        save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                        # TODO: save optimizer & grad scaler etc. like accelerator.save_state
-                        os.makedirs(save_path, exist_ok=True)
-                        save_model_hook(models, save_path)
-                        logger.info(f"Saved state to {save_path}")
+                    save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
+                    # TODO: save optimizer & grad scaler etc. like accelerator.save_state
+                    os.makedirs(save_path, exist_ok=True)
+                    save_model_hook(models, save_path)
+                    logger.info(f"Saved state to {save_path}")
 
             last_lr = optimizer.get_lr()
             last_lr = last_lr[0] if isinstance(last_lr, tuple) else last_lr  # grouped lr scenario
             logs = {"loss": loss.item(), "lr": last_lr.item()}
             progress_bar.set_postfix(**logs)
+            for tracker_name, tracker in trackers.items():
+                if tracker_name == "tensorboard":
+                    tracker.add_scalars("train", logs, global_step)
 
             if global_step >= args.max_train_steps:
                 break
@@ -554,6 +577,7 @@ def main(args):
                         args=args,
                         pipeline_args=pipeline_args,
                         epoch=epoch,
+                        is_final_validation=False,
                     )
 
                 del pipe
@@ -628,33 +652,23 @@ def main(args):
                 validation_outputs.extend(video)
 
 
-class TrainStepForCogVideo(TrainStep):
+class TrainStepForCogVideo(nn.Cell):
     def __init__(
         self,
         vae: Optional[nn.Cell],
         vae_config: Optional[ConfigMixin],
-        text_encoder: nn.Cell,
+        text_encoder: Optional[nn.Cell],
         transformer: nn.Cell,
-        optimizer: nn.Optimizer,
         scheduler: SchedulerMixin,
         weight_dtype: ms.Type,
-        length_of_dataloader: int,
-        args: Any,
+        args: AttrJitWrapper,
         use_rotary_positional_embeddings: bool,
     ):
-        super().__init__(
-            transformer,
-            optimizer,
-            StaticLossScaler(4096),
-            args.max_grad_norm,
-            args.gradient_accumulation_steps,
-            gradient_accumulation_kwargs=dict(length_of_dataloader=length_of_dataloader),
-        )
+        super().__init__()
 
         vae_config = vae_config or vae.config
 
         self.weight_dtype = weight_dtype
-        self.latent_dist = DiagonalGaussianDistribution()
         self.vae = vae
         self.vae_dtype = None if vae is None else vae.dtype
         self.vae_scaling_factor = vae_config.scaling_factor
@@ -683,13 +697,23 @@ class TrainStepForCogVideo(TrainStep):
 
         return prompt_embeds
 
-    def forward(self, videos, text_input_ids_or_prompt_embeds, image_rotary_emb=None):
+    def diagonal_gaussian_distribution_sample(self, latent_dist: ms.Tensor) -> ms.Tensor:
+        mean, logvar = ops.chunk(latent_dist, 2, axis=1)
+        logvar = ops.clamp(logvar, -30.0, 20.0)
+        std = ops.exp(0.5 * logvar)
+
+        sample = ops.randn_like(mean, dtype=mean.dtype)
+        x = mean + std * sample
+
+        return x
+
+    def construct(self, videos, text_input_ids_or_prompt_embeds, image_rotary_emb=None):
         # Encode videos
         if not self.args.load_tensors:
             videos = videos.permute(0, 2, 1, 3, 4).to(self.vae_dtype)  # [B, C, F, H, W]
             videos = self.vae.encode(videos)[0]
 
-        videos = self.latent_dist.sample(videos) * self.vae_scaling_factor
+        videos = self.diagonal_gaussian_distribution_sample(videos) * self.vae_scaling_factor
         videos = videos.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
         videos = videos.to(dtype=self.weight_dtype)
         model_input = videos
@@ -747,8 +771,7 @@ class TrainStepForCogVideo(TrainStep):
         )
         loss = loss.mean()
 
-        loss = self.scale_loss(loss)
-        return loss, model_pred
+        return loss
 
 
 if __name__ == "__main__":
