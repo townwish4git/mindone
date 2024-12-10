@@ -53,7 +53,7 @@ def _get_dataset_args(parser: argparse.ArgumentParser) -> None:
         "--caption_column",
         type=str,
         default="text",
-        help="The column of the dataset containing the instance prompt for each video. Or, the name of the file in `--data_root` folder containing the line-separated instance prompts.",
+        help="The column of the dataset containing the instance prompt for each video. Or, the name of the file in `--data_root` folder containing the line-separated instance prompts.",  # noqa: E501
     )
     parser.add_argument(
         "--id_token",
@@ -65,24 +65,25 @@ def _get_dataset_args(parser: argparse.ArgumentParser) -> None:
         "--height_buckets",
         nargs="+",
         type=int,
-        default=[256, 320, 384, 480, 512, 576, 720, 768, 960, 1024, 1280, 1536],
+        default=[480],
     )
     parser.add_argument(
         "--width_buckets",
         nargs="+",
         type=int,
-        default=[256, 320, 384, 480, 512, 576, 720, 768, 960, 1024, 1280, 1536],
+        default=[720],
     )
     parser.add_argument(
         "--frame_buckets",
         nargs="+",
         type=int,
         default=[49],
+        help="CogVideoX1.5 need to guarantee that ((num_frames - 1) // self.vae_scale_factor_temporal + 1) % patch_size_t != 0, such as 53",
     )
     parser.add_argument(
         "--load_tensors",
         action="store_true",
-        help="Whether to use a pre-encoded tensor dataset of latents and prompt embeddings instead of videos and text prompts. The expected format is that saved by running the `prepare_dataset.py` script.",
+        help="Whether to use a pre-encoded tensor dataset of latents and prompt embeddings instead of videos and text prompts. The expected format is that saved by running the `prepare_dataset.py` script.",  # noqa: E501
     )
     parser.add_argument(
         "--random_flip",
@@ -93,7 +94,7 @@ def _get_dataset_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--dataloader_num_workers",
         type=int,
-        default=0,
+        default=1,
         help="Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process.",
     )
     parser.add_argument(
@@ -108,13 +109,13 @@ def _get_validation_args(parser: argparse.ArgumentParser) -> None:
         "--validation_prompt",
         type=str,
         default=None,
-        help="One or more prompt(s) that is used during validation to verify that the model is learning. Multiple validation prompts should be separated by the '--validation_prompt_seperator' string.",
+        help="One or more prompt(s) that is used during validation to verify that the model is learning. Multiple validation prompts should be separated by the '--validation_prompt_seperator' string.",  # noqa: E501
     )
     parser.add_argument(
         "--validation_images",
         type=str,
         default=None,
-        help="One or more image path(s)/URLs that is used during validation to verify that the model is learning. Multiple validation paths should be separated by the '--validation_prompt_seperator' string. These should correspond to the order of the validation prompts.",
+        help="One or more image path(s)/URLs that is used during validation to verify that the model is learning. Multiple validation paths should be separated by the '--validation_prompt_seperator' string. These should correspond to the order of the validation prompts.",  # noqa: E501
     )
     parser.add_argument(
         "--validation_prompt_separator",
@@ -161,8 +162,9 @@ def _get_validation_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _get_training_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--distributed", action="store_true", help="Enable distributed training.")
     parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
-    parser.add_argument("--rank", type=int, default=64, help="The rank for LoRA matrices.")
+    parser.add_argument("--lora_rank", type=int, default=64, help="The rank for LoRA matrices.")
     parser.add_argument(
         "--lora_alpha",
         type=int,
@@ -178,6 +180,18 @@ def _get_training_args(parser: argparse.ArgumentParser) -> None:
             "Whether to use mixed precision. Choose between fp16 and bf16 (bfloat16). Bf16 requires PyTorch >= 1.10.and an Nvidia Ampere GPU. "
             "Default to the value of accelerate config of the current system or the flag passed with the `accelerate.launch` command. Use this "
             "argument to override the accelerate config."
+        ),
+    )
+    parser.add_argument(
+        "--amp_level",
+        type=str,
+        default="O2",
+        choices=["O0", "O1", "O2", "O3"],
+        help=(
+            "Level of auto mixed precision(amp). Supports [O0, O1, O2, O3]. O0: Do not change. O1: Convert cells"
+            "and operators in whitelist to lower precision operations, and keep full precision operations for "
+            "the rest. O2: Keep full precision operations for cells and operators in blacklist, and convert "
+            "the rest to lower precision operations. O3: Cast network to lower precision."
         ),
     )
     parser.add_argument(
@@ -350,6 +364,13 @@ def _get_optimizer_args(parser: argparse.ArgumentParser) -> None:
         help=("The optimizer type to use."),
     )
     parser.add_argument(
+        "--zero_stage",
+        type=int,
+        default=0,
+        choices=[0, 1, 2, 3],
+        help="ZeRO-Stage in data parallel.",
+    )
+    parser.add_argument(
         "--use_8bit",
         action="store_true",
         help="Whether or not to use 8-bit optimizers from `bitsandbytes` or `bitsandbytes`.",
@@ -462,7 +483,7 @@ def _get_configuration_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--report_to",
         type=str,
-        default=None,
+        default="tensorboard",
         help=(
             'The integration to report the results and logs to. Supported platforms are `"tensorboard"`'
             ' (default), `"wandb"` and `"comet_ml"`. Use `"all"` to report to all integrations.'
@@ -480,4 +501,27 @@ def get_args():
     _get_optimizer_args(parser)
     _get_configuration_args(parser)
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    def args_not_allow(arg_name, value):
+        if getattr(args, arg_name) == value:
+            raise ValueError(f"Training argument {arg_name} has inavailable value: {value}")
+
+    # Dynamic resolution is not supported right now.
+    if len(args.height_buckets) > 1 or len(args.width_buckets) > 1 or len(args.frame_buckets) > 1:
+        raise ValueError(
+            "All of training argument (height_buckets, width_buckets, frame_buckets) should be a one-element list."
+        )
+
+    # dataset_args
+    args_not_allow("pin_memory", True)
+    # validation_args
+    args_not_allow("enable_model_cpu_offload", True)
+    # optimizer_args
+    args_not_allow("optimizer", "prodigy")
+    args_not_allow("optimizer", "came")
+    args_not_allow("use_8bit", True)
+    args_not_allow("use_4bit", True)
+    args_not_allow("use_torchao", True)
+
+    return args
