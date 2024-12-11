@@ -806,3 +806,29 @@ class TrainStep(nn.Cell, metaclass=ABCMeta):
         loss = self.unscale_loss(outputs[0])
         outputs = (loss,) + outputs[1:]
         return outputs
+
+
+@ms.jit_class
+class pynative_no_grad(ms._no_grad):
+    """
+    Context Manager to disable gradient calculation. When enter this context, we will disable calculate
+    gradient. When exit this context, we will resume its prev state.
+    Currently, it can only use in Pynative mode. It also can be used as decorator.
+
+    For mindone.diffusers, it is used in PyNative training to decorate the part of calculation that
+    does not require gradients, e.g. vae.encode_images or text_encoder.encode_prompts where does not
+    need to train VAE or text-encoders.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.is_pynative_mode = context.get_context("mode") == context.PYNATIVE_MODE
+
+    def __enter__(self):
+        if self.is_pynative_mode:
+            super().__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.is_pynative_mode:
+            return super().__exit__(exc_type, exc_val, exc_tb)
+        return False

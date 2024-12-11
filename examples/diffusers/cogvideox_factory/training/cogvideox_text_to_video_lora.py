@@ -48,6 +48,7 @@ from mindone.diffusers.training_utils import (
     cast_training_params,
     init_distributed_device,
     is_master,
+    pynative_no_grad,
     set_seed,
 )
 from mindone.diffusers.utils import convert_unet_state_dict_to_peft, export_to_video
@@ -717,8 +718,9 @@ class TrainStepForCogVideo(nn.Cell):
     def construct(self, videos, text_input_ids_or_prompt_embeds, image_rotary_emb=None):
         # Encode videos
         if not self.args.load_tensors:
-            videos = videos.permute(0, 2, 1, 3, 4).to(self.vae_dtype)  # [B, C, F, H, W]
-            videos = self.vae.encode(videos)[0]
+            with pynative_no_grad():
+                videos = videos.permute(0, 2, 1, 3, 4).to(self.vae_dtype)  # [B, C, F, H, W]
+                videos = self.vae.encode(videos)[0]
 
         videos = self.diagonal_gaussian_distribution_sample(videos) * self.vae_scaling_factor
         videos = videos.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
@@ -727,10 +729,11 @@ class TrainStepForCogVideo(nn.Cell):
 
         # Encode prompts
         if not args.load_tensors:
-            prompt_embeds = self.compute_prompt_embeddings(
-                text_input_ids_or_prompt_embeds,
-                dtype=self.weight_dtype,
-            )
+            with pynative_no_grad():
+                prompt_embeds = self.compute_prompt_embeddings(
+                    text_input_ids_or_prompt_embeds,
+                    dtype=self.weight_dtype,
+                )
         else:
             prompt_embeds = text_input_ids_or_prompt_embeds.to(dtype=self.weight_dtype)
 
