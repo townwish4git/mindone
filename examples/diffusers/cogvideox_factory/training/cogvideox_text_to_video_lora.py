@@ -29,6 +29,7 @@ from transformers import AutoTokenizer
 
 import mindspore as ms
 from mindspore import nn, ops
+from mindspore.amp import auto_mixed_precision
 from mindspore.dataset import GeneratorDataset
 from mindspore.nn.wrap.loss_scale import DynamicLossScaleUpdateCell
 
@@ -56,7 +57,7 @@ from mindone.transformers import T5EncoderModel
 
 from args import get_args  # isort:skip
 from dataset import VideoDatasetWithResizing, VideoDatasetWithResizeAndRectangleCrop  # isort:skip
-from utils import auto_mixed_precision_rewrite, get_optimizer  # isort:skip
+from utils import get_optimizer  # isort:skip
 
 
 logger = get_logger(__name__)
@@ -134,6 +135,12 @@ def set_params_requires_grad(m: nn.Cell, requires_grad: bool):
 
 
 def main(args):
+    # Init context about MindSpore
+    ms.set_context(
+        mode=args.mindspore_mode,
+        jit_config={"jit_level": args.jit_level},
+    )
+
     # read attr distributed, writer attrs rank/local_rank/world_size:
     #   args.local_rank = mindspore.communication.get_local_rank()
     #   args.world_size = mindspore.communication.get_group_size()
@@ -365,10 +372,10 @@ def main(args):
     )
 
     # Make sure the trainable params are in float32.
-    # MindSpore Optimizers only allow float32, params with any other dtype should be converted
-    if args.mixed_precision in ("fp16", "bf16"):
-        # Keep model dtype float16/bfloat but upcast submodules in WHITE_LIST to float32 to avoid overflowing
-        transformer = auto_mixed_precision_rewrite(transformer, model_dtype=weight_dtype, amp_dtype=ms.float32)
+    # Do AMP wrapper manually
+    if args.mixed_precision == "fp16":
+        cast_training_params([transformer], dtype=ms.float32)
+        transformer = auto_mixed_precision(transformer, amp_level=args.amp_level, dtype=ms.float16)
 
     # Optimization parameters
     # Do Not define grouped learning rate here since it is not used but results in Call Depth Overflow failure
@@ -407,7 +414,7 @@ def main(args):
 
     loss_scaler = DynamicLossScaleUpdateCell(loss_scale_value=65536.0, scale_factor=2, scale_window=2000)
 
-    if args.zero_stage != 0:
+    if args.distributed and args.zero_stage != 0:
         train_step = prepare_train_network(
             train_step,
             optimizer=optimizer,
