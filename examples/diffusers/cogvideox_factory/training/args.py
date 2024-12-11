@@ -162,7 +162,6 @@ def _get_validation_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _get_training_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--distributed", action="store_true", help="Enable distributed training.")
     parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
     parser.add_argument("--lora_rank", type=int, default=64, help="The rank for LoRA matrices.")
     parser.add_argument(
@@ -180,18 +179,6 @@ def _get_training_args(parser: argparse.ArgumentParser) -> None:
             "Whether to use mixed precision. Choose between fp16 and bf16 (bfloat16). Bf16 requires PyTorch >= 1.10.and an Nvidia Ampere GPU. "
             "Default to the value of accelerate config of the current system or the flag passed with the `accelerate.launch` command. Use this "
             "argument to override the accelerate config."
-        ),
-    )
-    parser.add_argument(
-        "--amp_level",
-        type=str,
-        default="O2",
-        choices=["O0", "O1", "O2", "O3"],
-        help=(
-            "Level of auto mixed precision(amp). Supports [O0, O1, O2, O3]. O0: Do not change. O1: Convert cells"
-            "and operators in whitelist to lower precision operations, and keep full precision operations for "
-            "the rest. O2: Keep full precision operations for cells and operators in blacklist, and convert "
-            "the rest to lower precision operations. O3: Cast network to lower precision."
         ),
     )
     parser.add_argument(
@@ -364,13 +351,6 @@ def _get_optimizer_args(parser: argparse.ArgumentParser) -> None:
         help=("The optimizer type to use."),
     )
     parser.add_argument(
-        "--zero_stage",
-        type=int,
-        default=0,
-        choices=[0, 1, 2, 3],
-        help="ZeRO-Stage in data parallel.",
-    )
-    parser.add_argument(
         "--use_8bit",
         action="store_true",
         help="Whether or not to use 8-bit optimizers from `bitsandbytes` or `bitsandbytes`.",
@@ -491,6 +471,77 @@ def _get_configuration_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _get_mindspore_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--distributed", action="store_true", help="Enable distributed training.")
+    parser.add_argument(
+        "--mindspore_mode",
+        type=int,
+        default=1,
+        choices=[0, 1],
+        help="Forms of MindSpore programming execution, 0 means static graph mode and 1 means dynamic graph mode.",
+    )
+    parser.add_argument(
+        "--jit_level",
+        type=str,
+        default="O0",
+        choices=["O0", "O1", "O2"],
+        help=(
+            "Used to control the compilation optimization level, supports [O0, O1, O2]. The framework automatically "
+            "selects the execution method. O0: All optimizations except those necessary for functionality are "
+            "disabled, using an operator-by-operator execution method. O1: Enables common optimizations and automatic "
+            "operator fusion optimizations, using an operator-by-operator execution method. This is an experimental "
+            "optimization level, which is continuously being improved. O2: Enables extreme performance optimization, "
+            "using a sinking execution method. Only effective when args.mindspore_mode is 0"
+        ),
+    )
+    parser.add_argument(
+        "--amp_level",
+        type=str,
+        default="O2",
+        choices=["O0", "O1", "O2", "O3"],
+        help=(
+            "Level of auto mixed precision(amp). Supports [O0, O1, O2, O3]. O0: Do not change. O1: Convert cells"
+            "and operators in whitelist to lower precision operations, and keep full precision operations for "
+            "the rest. O2: Keep full precision operations for cells and operators in blacklist, and convert "
+            "the rest to lower precision operations. O3: Cast network to lower precision."
+        ),
+    )
+    parser.add_argument(
+        "--zero_stage",
+        type=int,
+        default=0,
+        choices=[0, 1, 2, 3],
+        help="ZeRO-Stage in data parallel.",
+    )
+
+
+def check_args(args):
+    if len(args.height_buckets) > 1 or len(args.width_buckets) > 1 or len(args.frame_buckets) > 1:
+        raise ValueError(
+            "All of training argument (height_buckets, width_buckets, frame_buckets) should be a one-element list."
+        )
+
+    if args.pin_memory:
+        raise ValueError("MindSpore does not support pin_memory.")
+
+    if args.enable_model_cpu_offload:
+        raise ValueError("MindONE.diffusers does not support `enable_model_cpu_offload` currently.")
+
+    if args.optimizer in ("prodigy", "came"):
+        raise ValueError(f"Unsupported optimizer: {args.optimizer}.")
+
+    if args.use_8bit or args.use_4bit or args.use_torchao:
+        raise ValueError("Low-bit optimizer is not supported in MindSpore currently.")
+
+    if args.push_to_hub:
+        raise ValueError("Pushing results to hub is not supported in MindSpore currently.")
+
+    if args.mindspore_mode == 0 and not args.load_tensors:
+        raise ValueError(
+            "Since VAE does not support MindSpore.GRAPH_MODE, you should only use graph_mode when load_tensors."
+        )
+
+
 def get_args():
     parser = argparse.ArgumentParser(description="Simple example of a training script for CogVideoX.")
 
@@ -500,28 +551,9 @@ def get_args():
     _get_validation_args(parser)
     _get_optimizer_args(parser)
     _get_configuration_args(parser)
+    _get_mindspore_args(parser)
 
     args = parser.parse_args()
-
-    def args_not_allow(arg_name, value):
-        if getattr(args, arg_name) == value:
-            raise ValueError(f"Training argument {arg_name} has inavailable value: {value}")
-
-    # Dynamic resolution is not supported right now.
-    if len(args.height_buckets) > 1 or len(args.width_buckets) > 1 or len(args.frame_buckets) > 1:
-        raise ValueError(
-            "All of training argument (height_buckets, width_buckets, frame_buckets) should be a one-element list."
-        )
-
-    # dataset_args
-    args_not_allow("pin_memory", True)
-    # validation_args
-    args_not_allow("enable_model_cpu_offload", True)
-    # optimizer_args
-    args_not_allow("optimizer", "prodigy")
-    args_not_allow("optimizer", "came")
-    args_not_allow("use_8bit", True)
-    args_not_allow("use_4bit", True)
-    args_not_allow("use_torchao", True)
+    check_args(args)
 
     return args
