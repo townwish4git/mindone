@@ -80,7 +80,8 @@ def log_validation(
 
     videos = []
     for _ in range(args.num_validation_videos):
-        video = pipe(**pipeline_args, generator=generator, output_type="np")[0][0]
+        with pynative_no_grad():
+            video = pipe(**pipeline_args, generator=generator, output_type="np")[0][0]
         videos.append(video)
 
     for tracker_name, tracker_writer in trackers.items():
@@ -485,33 +486,33 @@ def main(args):
                 progress_bar.update(1)
                 global_step += 1
 
-            if is_master(args):
-                if global_step % args.checkpointing_steps == 0:
-                    # _before_ saving state, check if this save would set us over the `checkpoints_total_limit`
-                    if args.checkpoints_total_limit is not None:
-                        checkpoints = os.listdir(args.output_dir)
-                        checkpoints = [d for d in checkpoints if d.startswith("checkpoint")]
-                        checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
+                if is_master(args):
+                    if global_step % args.checkpointing_steps == 0:
+                        # _before_ saving state, check if this save would set us over the `checkpoints_total_limit`
+                        if args.checkpoints_total_limit is not None:
+                            checkpoints = os.listdir(args.output_dir)
+                            checkpoints = [d for d in checkpoints if d.startswith("checkpoint")]
+                            checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[1]))
 
-                        # before we save the new checkpoint, we need to have at _most_ `checkpoints_total_limit - 1` checkpoints
-                        if len(checkpoints) >= args.checkpoints_total_limit:
-                            num_to_remove = len(checkpoints) - args.checkpoints_total_limit + 1
-                            removing_checkpoints = checkpoints[0:num_to_remove]
+                            # before we save the new checkpoint, we need to have at _most_ `checkpoints_total_limit - 1` checkpoints
+                            if len(checkpoints) >= args.checkpoints_total_limit:
+                                num_to_remove = len(checkpoints) - args.checkpoints_total_limit + 1
+                                removing_checkpoints = checkpoints[0:num_to_remove]
 
-                            logger.info(
-                                f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
-                            )
-                            logger.info(f"Removing checkpoints: {', '.join(removing_checkpoints)}")
+                                logger.info(
+                                    f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
+                                )
+                                logger.info(f"Removing checkpoints: {', '.join(removing_checkpoints)}")
 
-                            for removing_checkpoint in removing_checkpoints:
-                                removing_checkpoint = os.path.join(args.output_dir, removing_checkpoint)
-                                shutil.rmtree(removing_checkpoint)
+                                for removing_checkpoint in removing_checkpoints:
+                                    removing_checkpoint = os.path.join(args.output_dir, removing_checkpoint)
+                                    shutil.rmtree(removing_checkpoint)
 
-                    save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                    # TODO: save optimizer & grad scaler etc. like accelerator.save_state
-                    os.makedirs(save_path, exist_ok=True)
-                    save_model_hook(models, save_path)
-                    logger.info(f"Saved state to {save_path}")
+                        save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
+                        # TODO: save optimizer & grad scaler etc. like accelerator.save_state
+                        os.makedirs(save_path, exist_ok=True)
+                        save_model_hook(models, save_path)
+                        logger.info(f"Saved state to {save_path}")
 
             last_lr = optimizer.get_lr()
             last_lr = last_lr[0] if isinstance(last_lr, tuple) else last_lr  # grouped lr scenario
@@ -527,6 +528,7 @@ def main(args):
 
         if is_master(args):
             if args.validation_prompt is not None and (epoch + 1) % args.validation_epochs == 0:
+                pipe_init_kwargs = {} if args.load_tensors is None else {"text_encoder": text_encoder, "vae": vae}
                 pipe = CogVideoXPipeline.from_pretrained(
                     args.pretrained_model_name_or_path,
                     transformer=transformer,
@@ -534,6 +536,7 @@ def main(args):
                     revision=args.revision,
                     variant=args.variant,
                     mindspore_dtype=weight_dtype,
+                    **pipe_init_kwargs,
                 )
 
                 if args.enable_slicing:
