@@ -57,6 +57,7 @@ from mindone.transformers import T5EncoderModel
 
 from args import get_args  # isort:skip
 from dataset import VideoDatasetWithResizing, VideoDatasetWithResizeAndRectangleCrop  # isort:skip
+from pynative_recompute_monkey_patch import monkey_patch_recompute_cell, wrap_recompute_cell  # isort:skip
 from utils import get_optimizer  # isort:skip
 
 
@@ -229,6 +230,8 @@ def main(args):
 
     if args.gradient_checkpointing:
         transformer.enable_gradient_checkpointing()
+        wrap_recompute_cell(transformer)
+        monkey_patch_recompute_cell()
 
     # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
     def save_model_hook(models, output_dir):
