@@ -178,13 +178,21 @@ def main(args):
 
     scheduler = CogVideoXDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
 
+    # For mixed precision training we cast all non-trainable weights (vae, text_encoder and transformer) to half-precision
+    # as these weights are only used for inference, keeping weights in full precision is not required.
+    weight_dtype = ms.float32
+    if args.mixed_precision == "fp16":
+        weight_dtype = ms.float16
+    elif args.mixed_precision == "bf16":
+        weight_dtype = ms.bfloat16
+
     # CogVideoX-2b weights are stored in float16
     # CogVideoX-5b and CogVideoX-5b-I2V weights are stored in bfloat16
-    load_dtype = ms.bfloat16 if "5b" in args.pretrained_model_name_or_path.lower() else ms.float16
+    # load_dtype = ms.bfloat16 if "5b" in args.pretrained_model_name_or_path.lower() else ms.float16
     transformer = CogVideoXTransformer3DModel.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="transformer",
-        mindspore_dtype=load_dtype,
+        mindspore_dtype=weight_dtype,
         revision=args.revision,
         variant=args.variant,
     )
@@ -197,12 +205,14 @@ def main(args):
         text_encoder = T5EncoderModel.from_pretrained(
             args.pretrained_model_name_or_path,
             subfolder="text_encoder",
+            mindspore_dtype=weight_dtype,
             revision=args.revision,
         )
 
         vae = AutoencoderKLCogVideoX.from_pretrained(
             args.pretrained_model_name_or_path,
             subfolder="vae",
+            mindspore_dtype=weight_dtype,
             revision=args.revision,
             variant=args.variant,
         )
@@ -214,19 +224,6 @@ def main(args):
 
         set_params_requires_grad(text_encoder, False)
         set_params_requires_grad(vae, False)
-
-    # For mixed precision training we cast all non-trainable weights (vae, text_encoder and transformer) to half-precision
-    # as these weights are only used for inference, keeping weights in full precision is not required.
-    weight_dtype = ms.float32
-    if args.mixed_precision == "fp16":
-        weight_dtype = ms.float16
-    elif args.mixed_precision == "bf16":
-        weight_dtype = ms.bfloat16
-
-    transformer.to(dtype=weight_dtype)
-    if not args.load_tensors:
-        text_encoder.to(dtype=weight_dtype)
-        vae.to(dtype=weight_dtype)
 
     if args.gradient_checkpointing:
         transformer.enable_gradient_checkpointing()
