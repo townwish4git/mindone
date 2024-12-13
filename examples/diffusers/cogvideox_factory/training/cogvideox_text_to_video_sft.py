@@ -47,6 +47,7 @@ from mindone.diffusers.training_utils import (
     cast_training_params,
     init_distributed_device,
     is_master,
+    pynative_context,
     pynative_no_grad,
     set_seed,
 )
@@ -80,7 +81,7 @@ def log_validation(
 
     videos = []
     for _ in range(args.num_validation_videos):
-        with pynative_no_grad():
+        with pynative_context() and pynative_no_grad():
             video = pipe(**pipeline_args, generator=generator, output_type="np")[0][0]
         videos.append(video)
 
@@ -339,8 +340,8 @@ def main(args):
     lr_scheduler = get_scheduler(
         args.lr_scheduler,
         args.learning_rate,
-        num_warmup_steps=args.lr_warmup_steps * args.world_size,
-        num_training_steps=args.max_train_steps * args.world_size,
+        num_warmup_steps=args.lr_warmup_steps,
+        num_training_steps=args.max_train_steps,
         num_cycles=args.lr_num_cycles,
         power=args.lr_power,
     )

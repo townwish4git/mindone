@@ -1,3 +1,4 @@
+import contextlib
 import copy
 import logging
 import math
@@ -14,6 +15,7 @@ from tqdm.auto import tqdm
 import mindspore as ms
 from mindspore import context, nn, ops
 from mindspore.amp import DynamicLossScaler, StaticLossScaler, all_finite
+from mindspore.common.api import _pynative_executor
 from mindspore.communication import get_group_size, get_local_rank, get_rank, init
 
 from mindone.diffusers._peft import set_peft_model_state_dict
@@ -809,7 +811,7 @@ class TrainStep(nn.Cell, metaclass=ABCMeta):
 
 
 @ms.jit_class
-class pynative_no_grad(ms._no_grad):
+class pynative_no_grad(contextlib.ContextDecorator):
     """
     Context Manager to disable gradient calculation. When enter this context, we will disable calculate
     gradient. When exit this context, we will resume its prev state.
@@ -821,14 +823,31 @@ class pynative_no_grad(ms._no_grad):
     """
 
     def __init__(self):
-        super().__init__()
         self.is_pynative_mode = context.get_context("mode") == context.PYNATIVE_MODE
+        self.prev_state = False
 
     def __enter__(self):
         if self.is_pynative_mode:
-            super().__enter__()
+            self.prev_state = _pynative_executor.enable_grad()
+            _pynative_executor.set_enable_grad(False)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.is_pynative_mode:
-            return super().__exit__(exc_type, exc_val, exc_tb)
+            _pynative_executor.set_enable_grad(self.prev_state)
+        return False
+
+
+@ms.jit_class
+class pynative_context(contextlib.ContextDecorator):
+    def __init__(self):
+        self._prev_ms_jit = os.getenv("MS_JIT")
+
+    def __enter__(self):
+        os.environ["MS_JIT"] = 0
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._prev_ms_jit is None:
+            os.environ.pop("MS_JIT")
+        else:
+            os.environ["MS_JIT"] = self._prev_ms_jit
         return False
