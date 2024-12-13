@@ -81,7 +81,8 @@ def log_validation(
 
     videos = []
     for _ in range(args.num_validation_videos):
-        with pynative_context() and pynative_no_grad():
+        # Inference in PyNative Context and requires no grads, since VAE of pipeline does not support JIT
+        with pynative_context(), pynative_no_grad():
             video = pipe(**pipeline_args, generator=generator, output_type="np")[0][0]
         videos.append(video)
 
@@ -526,7 +527,7 @@ def main(args):
 
         if is_master(args):
             if args.validation_prompt is not None and (epoch + 1) % args.validation_epochs == 0:
-                pipe_init_kwargs = {} if args.load_tensors is None else {"text_encoder": text_encoder, "vae": vae}
+                pipe_init_kwargs = {} if args.load_tensors else {"text_encoder": text_encoder, "vae": vae}
                 pipe = CogVideoXPipeline.from_pretrained(
                     args.pretrained_model_name_or_path,
                     transformer=transformer,

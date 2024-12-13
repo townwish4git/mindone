@@ -815,7 +815,7 @@ class pynative_no_grad(contextlib.ContextDecorator):
     """
     Context Manager to disable gradient calculation. When enter this context, we will disable calculate
     gradient. When exit this context, we will resume its prev state.
-    Currently, it can only use in Pynative mode. It also can be used as decorator.
+    Currently, it can use both in Pynative and Graph mode. It also can be used as decorator.
 
     For mindone.diffusers, it is used in PyNative training to decorate the part of calculation that
     does not require gradients, e.g. vae.encode_images or text_encoder.encode_prompts where does not
@@ -823,7 +823,7 @@ class pynative_no_grad(contextlib.ContextDecorator):
     """
 
     def __init__(self):
-        self.is_pynative_mode = context.get_context("mode") == context.PYNATIVE_MODE
+        self.is_pynative_mode = context.get_context("mode") == context.PYNATIVE_MODE or os.getenv("MS_JIT") == "0"
         self.prev_state = False
 
     def __enter__(self):
@@ -839,11 +839,19 @@ class pynative_no_grad(contextlib.ContextDecorator):
 
 @ms.jit_class
 class pynative_context(contextlib.ContextDecorator):
+    """
+    Context Manager to create a temporary PyNative context. When enter this context, we will
+    change os.environ["MS_JIT"] to '0' to enable network run in eager mode. When exit this context,
+    we will resume its prev state. Currently, it CANNOT used inside mindspore.nn.Cell.construct()
+    when `mindspore.context.get_context("mode") == mindspore.context.GRAPH_MODE`. It can be used
+    as decorator.
+    """
+
     def __init__(self):
         self._prev_ms_jit = os.getenv("MS_JIT")
 
     def __enter__(self):
-        os.environ["MS_JIT"] = 0
+        os.environ["MS_JIT"] = "0"
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._prev_ms_jit is None:
