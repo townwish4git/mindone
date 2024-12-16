@@ -1,3 +1,4 @@
+import contextlib
 import copy
 import logging
 import math
@@ -14,6 +15,7 @@ from tqdm.auto import tqdm
 import mindspore as ms
 from mindspore import context, nn, ops
 from mindspore.amp import DynamicLossScaler, StaticLossScaler, all_finite
+from mindspore.common.api import _pynative_executor
 from mindspore.communication import get_group_size, get_local_rank, get_rank, init
 
 from mindone.diffusers._peft import set_peft_model_state_dict
@@ -806,3 +808,30 @@ class TrainStep(nn.Cell, metaclass=ABCMeta):
         loss = self.unscale_loss(outputs[0])
         outputs = (loss,) + outputs[1:]
         return outputs
+
+
+@ms.jit_class
+class pynative_no_grad(contextlib.ContextDecorator):
+    """
+    Context Manager to disable gradient calculation. When enter this context, we will disable calculate
+    gradient. When exit this context, we will resume its prev state.
+    Currently, it can use both in Pynative and Graph mode. It also can be used as decorator.
+
+    For mindone.diffusers, it is used in PyNative training to decorate the part of calculation that
+    does not require gradients, e.g. vae.encode_images or text_encoder.encode_prompts where does not
+    need to train VAE or text-encoders.
+    """
+
+    def __init__(self):
+        self.is_pynative_mode = context.get_context("mode") == context.PYNATIVE_MODE or os.getenv("MS_JIT") == "0"
+        self.prev_state = False
+
+    def __enter__(self):
+        if self.is_pynative_mode:
+            self.prev_state = _pynative_executor.enable_grad()
+            _pynative_executor.set_enable_grad(False)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.is_pynative_mode:
+            _pynative_executor.set_enable_grad(self.prev_state)
+        return False
