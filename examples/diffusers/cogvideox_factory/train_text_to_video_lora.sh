@@ -1,14 +1,19 @@
 export MS_ENABLE_NUMA=1
 
+# Num of NPUs for training
+NUM_NPUS=8
+
 # Training Configurations
 # Experiment with as many hyperparameters as you want!
 LEARNING_RATES=("1e-4" "1e-3")
 LR_SCHEDULES=("cosine_with_restarts")
 OPTIMIZERS=("adamw" "adam")
 MAX_TRAIN_STEPS=("3000")
+
+# MindSpore settings
 MINDSPORE_MODE=1
+JIT_LEVEL=O0
 AMP_LEVEL=O2
-NUM_NPUS=8
 DEEPSPEED_ZERO_STAGE=2
 
 # Prepare launch cmd according to NUM_NPUS

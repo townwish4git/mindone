@@ -236,10 +236,10 @@ def main(args):
     )
 
     text_encoder, vae = None, None
-    if not args.load_tensors:
-        # Load Text-encoder & VAE only needed. Because currently the MindSpore memory pool does
-        # not have the function of releasing memory fragments. Deleting them after loading still
-        # causes memory fragments which might result in OOM on devices.
+    # Only load Text-encoder & VAE when they are needed in training or validation. Because currently
+    # the MindSpore memory pool does not have the function of releasing memory fragments. Deleting
+    # them after loading still causes memory fragments which might result in OOM on devices.
+    if not args.load_tensors or args.validation_prompt is not None:
         text_encoder = T5EncoderModel.from_pretrained(
             args.pretrained_model_name_or_path,
             subfolder="text_encoder",
@@ -554,17 +554,17 @@ def main(args):
             last_lr = last_lr[0] if isinstance(last_lr, tuple) else last_lr  # grouped lr scenario
             logs = {"loss": loss.item(), "lr": last_lr.item()}
             progress_bar.set_postfix(**logs)
-            if is_master(args):
-                for tracker_name, tracker in trackers.items():
-                    if tracker_name == "tensorboard":
-                        tracker.add_scalars("train", logs, global_step)
+
+            for tracker_name, tracker in trackers.items():
+                if tracker_name == "tensorboard":
+                    tracker.add_scalars("train", logs, global_step)
 
             if global_step >= args.max_train_steps:
                 break
 
         if is_master(args):
             if args.validation_prompt is not None and (epoch + 1) % args.validation_epochs == 0:
-                pipe_init_kwargs = {} if args.load_tensors else {"text_encoder": text_encoder, "vae": vae}
+                pipe_init_kwargs = {} if text_encoder is None else {"text_encoder": text_encoder, "vae": vae}
                 pipe = CogVideoXPipeline.from_pretrained(
                     args.pretrained_model_name_or_path,
                     transformer=transformer,

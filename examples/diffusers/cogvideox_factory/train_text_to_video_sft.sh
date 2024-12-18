@@ -1,16 +1,22 @@
 export MS_ENABLE_NUMA=1
 
+# Num of NPUs for training
+NUM_NPUS=8
+
 # Training Configurations
 # Experiment with as many hyperparameters as you want!
 LEARNING_RATES=("1e-4")
 LR_SCHEDULES=("cosine_with_restarts")
 OPTIMIZERS=("adamw")
 MAX_TRAIN_STEPS=("20000")
-MINDSPORE_MODE=1
-AMP_LEVEL=O2
-NUM_NPUS=8
-DEEPSPEED_ZERO_STAGE=2
+
 OUTPUT_ROOT_DIR=/path/to/save/output
+
+# MindSpore settings
+MINDSPORE_MODE=1
+JIT_LEVEL=O0
+AMP_LEVEL=O2
+DEEPSPEED_ZERO_STAGE=2
 
 # Prepare launch cmd according to NUM_NPUS
 if [ "$NUM_NPUS" -eq 1 ]; then
@@ -70,6 +76,7 @@ for learning_rate in "${LEARNING_RATES[@]}"; do
           --max_grad_norm 1.0 \
           --report_to tensorboard \
           --mindspore_mode $MINDSPORE_MODE \
+          --jit_level $JIT_LEVEL \
           --amp_level $AMP_LEVEL \
           $EXTRA_ARGS"
 
