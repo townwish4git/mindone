@@ -47,13 +47,14 @@ from mindone.diffusers.training_utils import (
     AttrJitWrapper,
     cast_training_params,
     init_distributed_device,
+    is_local_master,
     is_master,
+    prepare_train_network,
     pynative_no_grad,
     set_seed,
 )
 from mindone.diffusers.utils import export_to_video
 from mindone.diffusers.utils.logging import get_logger
-from mindone.trainers.zero import TrainOneStepWrapper, prepare_train_network
 from mindone.transformers import T5EncoderModel
 
 from args import get_args  # isort:skip
@@ -268,7 +269,7 @@ def main(args):
 
     # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
     def save_model_hook(models, output_dir):
-        if is_master(args):
+        if is_local_master(args):
             for model in models:
                 if isinstance(model, CogVideoXTransformer3DModel):
                     model.save_pretrained(
@@ -423,26 +424,15 @@ def main(args):
     ).set_train(True)
 
     loss_scaler = DynamicLossScaleUpdateCell(loss_scale_value=65536.0, scale_factor=2, scale_window=2000)
-
-    if args.distributed and args.zero_stage != 0:
-        train_step = prepare_train_network(
-            train_step,
-            optimizer=optimizer,
-            scale_sense=loss_scaler,
-            gradient_accumulation_steps=args.gradient_accumulation_steps,
-            clip_grad=True,
-            clip_norm=args.max_grad_norm,
-            zero_stage=args.zero_stage,
-        )
-    else:
-        train_step = TrainOneStepWrapper(
-            train_step,
-            optimizer=optimizer,
-            scale_sense=loss_scaler,
-            gradient_accumulation_steps=args.gradient_accumulation_steps,
-            clip_grad=True,
-            clip_norm=args.max_grad_norm,
-        )
+    train_step = prepare_train_network(
+        train_step,
+        optimizer=optimizer,
+        scale_sense=loss_scaler,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        clip_grad=True,
+        clip_norm=args.max_grad_norm,
+        zero_stage=args.zero_stage,
+    )
 
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
@@ -496,10 +486,12 @@ def main(args):
                 logger.info(f"Resuming from checkpoint {path}")
             # TODO: load optimizer & grad scaler etc. like accelerator.load_state
             load_model_hook(models, os.path.join(args.output_dir, path))
+            train_step.load_state(args, os.path.join(args.output_dir, path))
             global_step = int(path.split("-")[1])
 
             initial_global_step = global_step
             first_epoch = global_step // num_update_steps_per_epoch
+            lr_scheduler = lr_scheduler[initial_global_step:]
 
     progress_bar = tqdm(
         range(0, args.max_train_steps),
@@ -522,7 +514,7 @@ def main(args):
                 progress_bar.update(1)
                 global_step += 1
 
-                if is_master(args):
+                if is_local_master(args):
                     if global_step % args.checkpointing_steps == 0:
                         # _before_ saving state, check if this save would set us over the `checkpoints_total_limit`
                         if args.checkpoints_total_limit is not None:
@@ -547,8 +539,10 @@ def main(args):
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
                         # TODO: save optimizer & grad scaler etc. like accelerator.save_state
                         os.makedirs(save_path, exist_ok=True)
-                        save_model_hook(models, save_path)
-                        logger.info(f"Saved state to {save_path}")
+
+                save_model_hook(models, save_path)
+                train_step.save_state(args, save_path)
+                logger.info(f"Saved state to {save_path}")
 
             last_lr = optimizer.get_lr()
             last_lr = last_lr[0] if isinstance(last_lr, tuple) else last_lr  # grouped lr scenario
