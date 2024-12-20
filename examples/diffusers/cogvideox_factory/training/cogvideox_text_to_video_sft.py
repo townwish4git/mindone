@@ -55,6 +55,7 @@ from mindone.diffusers.training_utils import (
 )
 from mindone.diffusers.utils import export_to_video
 from mindone.diffusers.utils.logging import get_logger
+from mindone.diffusers.utils.mindspore_utils import get_state_dict
 from mindone.transformers import T5EncoderModel
 
 from args import get_args  # isort:skip
@@ -279,12 +280,7 @@ def main(args):
                     raise ValueError(f"Unexpected save model: {model.__class__}")
 
     def load_model_hook(models, input_dir):
-        transformer_ = None
-
-        # @a-r-r-o-w: This is a bit of a hack but I don't know any other solution.
-        while len(models) > 0:
-            model = models.pop()
-
+        for model in models:
             if isinstance(model, type(transformer)):
                 transformer_ = model
             else:
@@ -292,7 +288,7 @@ def main(args):
 
         load_model = CogVideoXTransformer3DModel.from_pretrained(os.path.join(input_dir, "transformer"))
         transformer_.register_to_config(**load_model.config)
-        ms.load_param_into_net(transformer_, load_model.parameters_dict())
+        ms.load_param_into_net(transformer_, get_state_dict(load_model, name_prefix="transformer"))
         del load_model
 
         # Make sure the trainable params are in float32. This is again needed since the base models
@@ -300,6 +296,10 @@ def main(args):
         # https://github.com/huggingface/diffusers/pull/6514#discussion_r1449796804
         if args.mixed_precision == "fp16":
             cast_training_params([transformer_])
+
+    # filter unnecessary optimizer state for loading & saving state
+    def optimizer_state_filter(param_name: str):
+        return not param_name.startswith("transformer")
 
     # Define models to load or save for load_model_hook() and save_model_hook()
     models = [transformer]
@@ -483,10 +483,10 @@ def main(args):
             initial_global_step = 0
         else:
             if is_master(args):
-                logger.info(f"Resuming from checkpoint {path}")
+                logger.info(f"Resuming from {path}")
             # TODO: load optimizer & grad scaler etc. like accelerator.load_state
             load_model_hook(models, os.path.join(args.output_dir, path))
-            train_step.load_state(args, os.path.join(args.output_dir, path))
+            train_step.load_state(args, os.path.join(args.output_dir, path), optimizer_state_filter)
             global_step = int(path.split("-")[1])
 
             initial_global_step = global_step
@@ -514,8 +514,8 @@ def main(args):
                 progress_bar.update(1)
                 global_step += 1
 
-                if is_local_master(args):
-                    if global_step % args.checkpointing_steps == 0:
+                if global_step % args.checkpointing_steps == 0:
+                    if is_local_master(args):
                         # _before_ saving state, check if this save would set us over the `checkpoints_total_limit`
                         if args.checkpoints_total_limit is not None:
                             checkpoints = os.listdir(args.output_dir)
@@ -536,13 +536,12 @@ def main(args):
                                     removing_checkpoint = os.path.join(args.output_dir, removing_checkpoint)
                                     shutil.rmtree(removing_checkpoint)
 
-                        save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                        # TODO: save optimizer & grad scaler etc. like accelerator.save_state
-                        os.makedirs(save_path, exist_ok=True)
-
-                save_model_hook(models, save_path)
-                train_step.save_state(args, save_path)
-                logger.info(f"Saved state to {save_path}")
+                    save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
+                    # TODO: save optimizer & grad scaler etc. like accelerator.save_state
+                    os.makedirs(save_path, exist_ok=True)
+                    save_model_hook(models, save_path)
+                    train_step.save_state(args, save_path, optimizer_state_filter)
+                    logger.info(f"Saved state to {save_path}")
 
             last_lr = optimizer.get_lr()
             last_lr = last_lr[0] if isinstance(last_lr, tuple) else last_lr  # grouped lr scenario

@@ -23,6 +23,7 @@ from mindspore.context import ParallelMode
 from mindspore.parallel._utils import _get_parallel_mode
 
 from mindone.diffusers._peft import set_peft_model_state_dict
+from mindone.diffusers.models.model_loading_utils import silence_mindspore_logger
 from mindone.trainers.train_step import TrainOneStepWrapper
 from mindone.trainers.zero import ZeroHelper, prepare_network
 
@@ -930,20 +931,22 @@ class DiffusersTrainOneStepWrapper(TrainOneStepWrapper):
         return self.zero_helper is not None and self.zero_stage != 0
 
     def need_save_optimizer(self, args):
-        # TODO: Now we save optimizer in everydepend on self.zero_helper.op_group
+        # TODO: Now we save optimizer in every process, try to save depend on self.zero_helper.op_group
         return True if self.use_zero else is_local_master(args)
 
-    def save_state(self, args, output_dir):
+    def save_state(self, args, output_dir, optimizer_state_filter=lambda x: True):
         os.makedirs(output_dir, exist_ok=True)
         logger.info(f"Saving current state to {output_dir}")
 
         # Optimizer states
         if self.use_zero:
+            os.makedirs(os.path.join(output_dir, "mindspore_model"), exist_ok=True)
+            zero_optimizer_state_filter = lambda x: not x.startswith("wrapper") and optimizer_state_filter(x)
             optimizer_file = os.path.join(output_dir, "mindspore_model", f"zero_pp_{args.local_rank}_optim_states.ckpt")
-            ms.save_checkpoint(self.optimizer, optimizer_file)
+            ms.save_checkpoint(self.optimizer, optimizer_file, choice_func=zero_optimizer_state_filter)
         elif self.need_save_optimizer(args):
             optimizer_file = os.path.join(output_dir, "optimizer.ckpt")
-            ms.save_checkpoint(self.optimizer, optimizer_file)
+            ms.save_checkpoint(self.optimizer, optimizer_file, choice_func=optimizer_state_filter)
 
         # Loss Scaler states
         loss_scaler_file = os.path.join(output_dir, "loss_scaler.ckpt")
@@ -957,14 +960,25 @@ class DiffusersTrainOneStepWrapper(TrainOneStepWrapper):
             )
         ms.save_checkpoint(loss_scaler_states, loss_scaler_file)
 
-    def load_state(self, args, input_dir):
+    def load_state(self, args, input_dir, optimizer_state_filter=lambda x: True):
         # Optimizer states
         optimizer_file = (
             os.path.join(input_dir, "mindspore_model", f"zero_pp_{args.local_rank}_optim_states.ckpt")
             if self.use_zero
             else os.path.join(input_dir, "optimizer.ckpt")
         )
-        ms.load_checkpoint(optimizer_file, self.optimizer)
+        optimizer_state_dict = ms.load_checkpoint(optimizer_file)
+
+        with silence_mindspore_logger():
+            param_not_load, ckpt_not_load = ms.load_param_into_net(self.optimizer, optimizer_state_dict)
+
+        param_not_load = list(
+            filter(lambda x: not x.startswith("wrapper") and optimizer_state_filter(x), param_not_load)
+        )
+        if param_not_load or ckpt_not_load:
+            logger.warning(
+                f"Loading checkpoint into optimizer returns param_not_load:{param_not_load} \nand ckpt_not_load:{ckpt_not_load}"
+            )
 
         # Loss Scaler states
         loss_scaler_file = os.path.join(input_dir, "loss_scaler.ckpt")
