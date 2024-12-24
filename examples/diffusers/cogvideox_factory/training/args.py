@@ -474,6 +474,9 @@ def _get_configuration_args(parser: argparse.ArgumentParser) -> None:
 def _get_mindspore_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--distributed", action="store_true", help="Enable distributed training.")
     parser.add_argument(
+        "--enable_dynamic_resolutions", action="store_true", help="Enable data inputs of dynamic resolutions."
+    )
+    parser.add_argument(
         "--mindspore_mode",
         type=int,
         default=1,

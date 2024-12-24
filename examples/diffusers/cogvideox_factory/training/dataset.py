@@ -199,6 +199,81 @@ class VideoDataset(object):
                 "rotary_positional_embeddings": self.ropes,
             }
 
+    def _dynamic_resolutions_rewrited_getitem(self, index: int) -> Dict[str, Any]:
+        if isinstance(index, list):
+            # Here, index is actually a list of data objects that we need to return.
+            # The BucketSampler should ideally return indices. But, in the sampler, we'd like
+            # to have information about num_frames, height and width. Since this is not stored
+            # as metadata, we need to read the video to get this information. You could read this
+            # information without loading the full video in memory, but we do it anyway. In order
+            # to not load the video twice (once to get the metadata, and once to return the loaded video
+            # based on sampled indices), we cache it in the BucketSampler. When the sampler is
+            # to yield, we yield the cache data instead of indices. So, this special check ensures
+            # that data is not loaded a second time. PRs are welcome for improvements.
+            return index
+
+        if self.load_tensors:
+            image_latents, video_latents, prompt_embeds = self._preprocess_video(self.video_paths[index])
+
+            # This is hardcoded for now.
+            # The VAE's temporal compression ratio is 4.
+            # The VAE's spatial compression ratio is 8.
+            latent_num_frames = video_latents.shape[1]
+            if latent_num_frames % 2 == 0:
+                num_frames = latent_num_frames * 4
+            else:
+                num_frames = (latent_num_frames - 1) * 4 + 1
+
+            height = video_latents.shape[2] * 8
+            width = video_latents.shape[3] * 8
+
+            if self.use_rotary_positional_embeddings:
+                image_rotary_emb = prepare_rotary_positional_embeddings(
+                    height=height,
+                    width=width,
+                    num_frames=int(num_frames),
+                    vae_scale_factor_spatial=self.vae_scale_factor_spatial,
+                    patch_size=self.patch_size,
+                    patch_size_t=self.patch_size_t,
+                    attention_head_dim=self.attention_head_dim,
+                    base_height=self.base_height,
+                    base_width=self.base_width,
+                )
+
+                return prompt_embeds, video_latents, image_rotary_emb
+            else:
+                return prompt_embeds, video_latents
+        else:
+            image, video, _ = self._preprocess_video(self.video_paths[index])
+
+            prompt = self.id_token + self.prompts[index]
+            text_inputs = self.tokenizer(
+                prompt,
+                padding="max_length",
+                max_length=self.max_sequence_length,
+                truncation=True,
+                add_special_tokens=True,
+                return_tensors="np",
+            )
+            text_input_ids = text_inputs.input_ids.squeeze()
+
+            if self.use_rotary_positional_embeddings:
+                image_rotary_emb = prepare_rotary_positional_embeddings(
+                    height=video.shape[2],
+                    width=video.shape[3],
+                    num_frames=int(video.shape[0]),
+                    vae_scale_factor_spatial=self.vae_scale_factor_spatial,
+                    patch_size=self.patch_size,
+                    patch_size_t=self.patch_size_t,
+                    attention_head_dim=self.attention_head_dim,
+                    base_height=self.base_height,
+                    base_width=self.base_width,
+                )
+
+                return text_input_ids, video, image_rotary_emb
+            else:
+                return text_input_ids, video
+
     def _load_dataset_from_local_path(self) -> Tuple[List[str], List[str]]:
         if not self.data_root.exists():
             raise ValueError("Root folder for videos does not exist")
@@ -331,6 +406,12 @@ class VideoDataset(object):
 
         self.ropes = image_rotary_emb
 
+    def enable_dynamic_resolutions(self):
+        logger.warning(
+            "`VideoDataset.enable_dynamic_resolutions` is called, __getitem__ will be rewrited via monkey patching."
+        )
+        self.__getitem__ = self._dynamic_resolutions_rewrited_getitem
+
 
 class VideoDatasetWithResizing(VideoDataset):
     def __init__(self, *args, **kwargs) -> None:
@@ -426,3 +507,18 @@ class VideoDatasetWithResizeAndRectangleCrop(VideoDataset):
     def _find_nearest_resolution(self, height, width):
         nearest_res = min(self.resolutions, key=lambda x: abs(x[1] - height) + abs(x[2] - width))
         return nearest_res[1], nearest_res[2]
+
+
+def prepare_bucket_sampler(dataset: VideoDataset, bs: int):
+    resolutions_inverted_index = {}
+    for idx, res in enumerate(dataset.resolutions):
+        resolutions_inverted_index[res] = idx + 1
+
+    def element_length_function(example):
+        return resolutions_inverted_index[example.shape]
+
+    bucket_boundaries = list(range(1, len(dataset.resolutions)))
+
+    bucket_batch_sizes = [bs] * len(dataset.resolutions)
+
+    return element_length_function, bucket_boundaries, bucket_batch_sizes

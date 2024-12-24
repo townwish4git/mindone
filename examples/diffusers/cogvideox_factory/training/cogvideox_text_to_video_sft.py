@@ -58,9 +58,11 @@ from mindone.diffusers.utils.logging import get_logger
 from mindone.diffusers.utils.mindspore_utils import get_state_dict
 from mindone.transformers import T5EncoderModel
 
+# fmt: off
 from args import get_args  # isort:skip
-from dataset import VideoDatasetWithResizing, VideoDatasetWithResizeAndRectangleCrop  # isort:skip
+from dataset import VideoDatasetWithResizeAndRectangleCrop, VideoDatasetWithResizing, prepare_bucket_sampler  # isort:skip
 from utils import get_optimizer  # isort:skip
+# fmt: on
 
 
 logger = get_logger(__name__)
@@ -350,22 +352,43 @@ def main(args):
             video_reshape_mode=args.video_reshape_mode, **dataset_init_kwargs
         )
 
-    collate_fn = CollateFunction(weight_dtype, args.load_tensors, transformer_config.use_rotary_positional_embeddings)
+    if args.enable_dynamic_resolutions:
+        train_dataset.enable_dynamic_resolutions()
+        element_length_function, bucket_boundaries, bucket_batch_sizes = prepare_bucket_sampler(
+            train_dataset, args.train_batch_size
+        )
 
-    train_dataloader = GeneratorDataset(
-        train_dataset,
-        column_names=["examples"],
-        shard_id=args.rank,
-        num_shards=args.world_size,
-        num_parallel_workers=args.dataloader_num_workers,
-    ).batch(
-        batch_size=args.train_batch_size,
-        per_batch_map=lambda examples, batch_info: collate_fn(examples),
-        input_columns=["examples"],
-        output_columns=["videos", "text_input_ids", "rotary_positional_embeddings"]
-        if transformer_config.use_rotary_positional_embeddings
-        else ["videos", "text_input_ids"],
-    )
+        train_dataloader = GeneratorDataset(
+            train_dataset,
+            column_names=["examples"],
+            shard_id=args.rank,
+            num_shards=args.world_size,
+            num_parallel_workers=args.dataloader_num_workers,
+        ).bucket_batch_by_length(
+            column_names=["examples"],
+            bucket_boundaries=bucket_boundaries,
+            bucket_batch_sizes=bucket_batch_sizes,
+            element_length_function=element_length_function,
+        )
+    else:
+        collate_fn = CollateFunction(
+            weight_dtype, args.load_tensors, transformer_config.use_rotary_positional_embeddings
+        )
+
+        train_dataloader = GeneratorDataset(
+            train_dataset,
+            column_names=["examples"],
+            shard_id=args.rank,
+            num_shards=args.world_size,
+            num_parallel_workers=args.dataloader_num_workers,
+        ).batch(
+            batch_size=args.train_batch_size,
+            per_batch_map=lambda examples, batch_info: collate_fn(examples),
+            input_columns=["examples"],
+            output_columns=["videos", "text_input_ids", "rotary_positional_embeddings"]
+            if transformer_config.use_rotary_positional_embeddings
+            else ["videos", "text_input_ids"],
+        )
 
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
@@ -428,6 +451,9 @@ def main(args):
         args=args,
         use_rotary_positional_embeddings=transformer_config.use_rotary_positional_embeddings,
     ).set_train(True)
+
+    if args.enable_dynamic_resolutions:
+        train_step.enable_dynamic_resolutions()
 
     loss_scaler = DynamicLossScaleUpdateCell(loss_scale_value=65536.0, scale_factor=2, scale_window=2000)
     train_step = prepare_train_network(
@@ -720,6 +746,31 @@ class TrainStepForCogVideo(nn.Cell):
         x = mean + std * sample
 
         return x
+
+    def enable_dynamic_resolutions(self):
+        if context.get_context("mode") == context.PYNATIVE_MODE:
+            return
+
+        batch_size = self.args.train_batch_size
+
+        if self.args.load_tensors:
+            videos = ms.Tensor(shape=[batch_size, 3, None, None, None], dtype=ms.float32)
+            text_input_ids_or_prompt_embeds = ms.Tensor(
+                shape=[batch_size, self.transformer.config.max_text_seq_length, self.transformer.config.text_embed_dim],
+                dtype=ms.float32,
+            )
+        else:
+            videos = ms.Tensor(shape=[batch_size, None, 3, None, None], dtype=ms.float32)
+            text_input_ids_or_prompt_embeds = ms.Tensor(
+                shape=[batch_size, self.transformer.config.max_text_seq_length], dtype=ms.int64
+            )
+
+        more_args = ()
+        if self.use_rotary_positional_embeddings:
+            image_rotary_emb = ms.Tensor(shape=[batch_size, 2, None, None], dtype=ms.float32)
+            more_args = (image_rotary_emb,)
+
+        self.transformer.set_inputs(videos, text_input_ids_or_prompt_embeds, *more_args)
 
     def construct(self, videos, text_input_ids_or_prompt_embeds, image_rotary_emb=None):
         # Encode videos
