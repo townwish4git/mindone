@@ -256,6 +256,7 @@ def main(args):
             revision=args.revision,
             variant=args.variant,
         )
+        vae_dtype = vae.dtype
 
         if args.enable_slicing:
             vae.enable_slicing()
@@ -513,7 +514,16 @@ def main(args):
         transformer.set_train(True)
 
         for step, batch in enumerate(train_dataloader_iter):
-            loss, _, _ = train_step(*batch)
+            videos, text_input_ids = batch[0], batch[1]
+            rotary_positional_embeddings = batch[2] if transformer_config.use_rotary_positional_embeddings else None
+
+            # Encode videos
+            if not args.load_tensors:
+                with pynative_context(), pynative_no_grad():
+                    videos = videos.permute(0, 2, 1, 3, 4).to(vae_dtype)  # [B, C, F, H, W]
+                    videos = vae.encode(videos)[0]
+
+            loss, _, _ = train_step(videos, text_input_ids, rotary_positional_embeddings)
 
             # Checks if the accelerator has performed an optimization step behind the scenes
             if train_step.accum_steps == 1 or train_step.cur_accum_step.item() == 0:
@@ -722,12 +732,6 @@ class TrainStepForCogVideo(nn.Cell):
         return x
 
     def construct(self, videos, text_input_ids_or_prompt_embeds, image_rotary_emb=None):
-        # Encode videos
-        if not self.args.load_tensors:
-            with pynative_no_grad():
-                videos = videos.permute(0, 2, 1, 3, 4).to(self.vae_dtype)  # [B, C, F, H, W]
-                videos = self.vae.encode(videos)[0]
-
         videos = self.diagonal_gaussian_distribution_sample(videos) * self.vae_scaling_factor
         videos = videos.permute(0, 2, 1, 3, 4)  # [B, F, C, H, W]
         videos = videos.to(dtype=self.weight_dtype)
