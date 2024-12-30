@@ -32,6 +32,7 @@ import mindspore as ms
 from mindspore import context, nn, ops
 from mindspore.amp import auto_mixed_precision
 from mindspore.dataset import GeneratorDataset
+from mindspore.train import Model
 from mindspore.nn.wrap.loss_scale import DynamicLossScaleUpdateCell
 
 from mindone.diffusers import (
@@ -440,6 +441,8 @@ def main(args):
         zero_stage=args.zero_stage,
     )
 
+    train_model = Model(train_step)
+
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if is_master(args):
@@ -499,6 +502,10 @@ def main(args):
             first_epoch = global_step // num_update_steps_per_epoch
             lr_scheduler = lr_scheduler[initial_global_step:]
 
+    train_model.fit(args.num_train_epochs, train_dataloader)
+
+    return
+    
     progress_bar = tqdm(
         range(0, args.max_train_steps),
         initial=initial_global_step,
