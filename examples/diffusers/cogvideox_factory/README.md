@@ -89,53 +89,8 @@ export_to_video(video, "output.mp4", fps=8)
 
 在开始训练之前，请你检查是否按照[数据集规范](./assets/dataset_zh.md)准备好了数据集。 我们提供了适用于文本到视频 (text-to-video) 生成的训练脚本，兼容 [CogVideoX 模型家族](https://huggingface.co/collections/THUDM/cogvideo-66c08e62f1685a3ade464cce)。正式训练可以通过 `train*.sh` 脚本启动，具体取决于你想要训练的任务。让我们以文本到视频的 LoRA 微调为例。
 
-> [!TIP]
-> 由于模型和框架的限制，对于训练我们暂时推荐分阶段的训练流程，即先通过[`prepare_dateset.sh`](./prepare_dataset.sh)预处理数据集，然后读取预处理后的数据集通过`train*.sh`进行正式训练。
->
-> 在正式训练阶段，需要增加`--load_tensors`参数以支持预处理数据集。建议增加参数`--mindspore_mode=0`以进行静态图训练加速，在`train*.sh`里可通过设置参数`MINDSPORE_MODE=0`实现。
->
-> 具体情况参见[与原仓的差异 & 功能限制](#与原仓的差异功能限制)
-
-### 预处理数据
-
-通过[`prepare_dateset.sh`](./prepare_dataset.sh)预处理数据。注意其中用到的预训练模型、分辨率、帧率、文本的`max_sequence_length`设置都应当与正式训练一致！
-
-- 配置用于预处理prompts和videos的模型：
-```shell
-MODEL_ID="THUDM/CogVideoX-2b"
-```
-
-- 配置用于预处理数据的NPU数量：
-```shell
-NUM_NPUS=8
-```
-
-- 配置待处理数据集读取配置和输出路径：
-```shell
-DATA_ROOT="/path/to/my/datasets/video-dataset"
-CAPTION_COLUMN="prompt.txt"
-VIDEO_COLUMN="videos.txt"
-OUTPUT_DIR="/path/to/my/datasets/preprocessed-dataset"
-```
-
-- 配置prompts和videos预处理的相关参数（注意必须与正式训练的配置一致）：
-```shell
-HEIGHT_BUCKETS="480"
-WIDTH_BUCKETS="720"
-FRAME_BUCKETS="49"
-MAX_NUM_FRAMES="49"
-MAX_SEQUENCE_LENGTH=226
-TARGET_FPS=8
-```
-
-- 配置预处理流程的批量大小、指定计算的数据类型：
-```shell
-BATCH_SIZE=1
-DTYPE=bf16
-```
-然后正式运行`prepare_dateset.sh`，输出预处理后的数据集至`OUTPUT_DIR`
-
-### 正式训练
+> [!WARNING]
+> 在当前的软件版本下，动态图训练存在缓慢的内存泄漏，较长步数训练情况下会导致显存占用异常进而产生OOM Error。因此当前版本并不推荐动态图训练。
 
 - 配置用于训练的NPU数量：`NUM_NPUS=8`
 
@@ -155,12 +110,17 @@ DTYPE=bf16
   DEEPSPEED_ZERO_STAGE=2
   ```
 
-- 指定**预处理后**的字幕和视频的绝对路径以及列/文件。
+- 指定字幕和视频的绝对路径以及列/文件。
 
   ```shell
-  DATA_ROOT="/path/to/my/datasets/preprocessed-dataset"
-  CAPTION_COLUMN="prompts.txt"
+  DATA_ROOT="/path/to/my/datasets/video-dataset-disney"
+  CAPTION_COLUMN="prompt.txt"
   VIDEO_COLUMN="videos.txt"
+  ```
+
+- 指定实验的预训练模型：
+  ```shell
+  MODEL_PATH="THUDM/CogVideoX-5b"
   ```
 
 - 运行实验，遍历不同的超参数：
@@ -211,7 +171,6 @@ DTYPE=bf16
             --report_to tensorboard \
             --mindspore_mode $MINDSPORE_MODE \
             --amp_level $AMP_LEVEL \
-            --load_tensors \
             $EXTRA_ARGS"
 
           echo "Running command: $cmd"
@@ -243,9 +202,4 @@ DTYPE=bf16
 
 ### 功能限制
 
-> [!WARNING]
-> 在当前的软件版本下，动态图训练存在缓慢的内存泄漏，较长步数训练情况下会导致显存占用异常进而产生OOM Error。因此当前版本并不推荐动态图训练。
-
 当前训练脚本并不完全支持原仓代码的所有训练参数，详情参见[`args.py`](./training/args.py)中的`check_args()`。
-
-其中一个主要的限制来自于CogVideoX模型中的[3D Causual VAE不支持静态图](https://gist.github.com/townwish4git/b6cd0d213b396eaedfb69b3abcd742da)，这导致我们**不支持静态图模式下VAE参与训练**，因此在静态图模式下必须提前进行数据预处理以获取VAE-latents/text-encoder-embeddings cache。

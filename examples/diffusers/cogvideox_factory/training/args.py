@@ -536,11 +536,6 @@ def check_args(args):
     if args.push_to_hub:
         raise ValueError("Pushing results to hub is not supported in MindSpore currently.")
 
-    if args.mindspore_mode == 0 and not args.load_tensors:
-        raise ValueError(
-            "Since VAE does not support MindSpore.GRAPH_MODE, you should only use graph_mode when load_tensors."
-        )
-
 
 def get_args():
     parser = argparse.ArgumentParser(description="Simple example of a training script for CogVideoX.")
