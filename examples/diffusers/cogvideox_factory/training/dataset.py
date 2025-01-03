@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import cv2
+import decord
 import numpy as np
 import pandas as pd
 from transformers import PreTrainedTokenizer
@@ -11,10 +13,6 @@ from mindspore.dataset.vision import Inter as InterpolationMode
 from mindone.diffusers.utils import get_logger
 
 from utils import pad_last_frame, prepare_rotary_positional_embeddings  # isort:skip
-
-# Must import after torch because this can sometimes lead to a nasty segmentation fault, or stack smashing error
-# Very few bug reports but it happens. Look in decord Github issues for more relevant information.
-import decord  # isort:skip
 
 decord.bridge.set_bridge("native")
 
@@ -56,6 +54,7 @@ class VideoDataset(object):
         attention_head_dim: Optional[int] = None,
         base_height: int = 480,
         base_width: int = 720,
+        video_reader_backend: str = "cv2",
     ) -> None:
         super().__init__()
 
@@ -84,6 +83,13 @@ class VideoDataset(object):
         self.attention_head_dim = attention_head_dim
         self.base_height = base_height
         self.base_width = base_width
+        self.video_reader_backend = video_reader_backend
+
+        # Support cv2 as well and set it default as decord on EulerOS might have problems about memory leak.
+        if self.video_reader_backend not in ("cv2", "decord"):
+            raise NotImplementedError(
+                f"With regard to backend of video reader, we only support `decord` and `cv2`, but got {video_reader_backend}"
+            )
 
         self.resolutions = [
             (f, h, w) for h in self.height_buckets for w in self.width_buckets for f in self.frame_buckets
@@ -253,13 +259,31 @@ class VideoDataset(object):
         """
         if self.load_tensors:
             return self._load_preprocessed_latents_and_embeds(path)
-        else:
+        elif self.video_reader_backend == "decord":
             video_reader = decord.VideoReader(uri=path.as_posix())
             video_num_frames = len(video_reader)
 
             indices = list(range(0, video_num_frames, max(1, video_num_frames // self.max_num_frames)))
             frames = video_reader.get_batch(indices).asnumpy()
             frames = frames[: self.max_num_frames].astype(np.float32)
+            frames = np.ascontiguousarray(frames.transpose(0, 3, 1, 2))
+            frames = np.stack([self.video_transforms(frame) for frame in frames], axis=0)
+
+            image = frames[:1].copy() if self.image_to_video else None
+
+            return image, frames, None
+        elif self.video_reader_backend == "cv2":
+            video_reader = cv2.VideoCapture(path.as_posix(), apiPreference=cv2.CAP_FFMPEG)
+            if not video_reader.isOpened():
+                raise IOError(f"Video {path.as_posix()} cannot be opened.")
+
+            frames = []
+            video_num_frames = int(video_reader.get(cv2.CAP_PROP_FRAME_COUNT))
+            for i in range(0, video_num_frames, max(1, video_num_frames // self.max_num_frames)):
+                video_reader.set(cv2.CAP_PROP_POS_FRAMES, i)
+                ret, frame = video_reader.read()
+                frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            frames = np.stack(frames)[: self.max_num_frames].astype(np.float32)
             frames = np.ascontiguousarray(frames.transpose(0, 3, 1, 2))
             frames = np.stack([self.video_transforms(frame) for frame in frames], axis=0)
 
@@ -339,7 +363,7 @@ class VideoDatasetWithResizing(VideoDataset):
     def _preprocess_video(self, path: Path) -> np.ndarray:
         if self.load_tensors:
             return self._load_preprocessed_latents_and_embeds(path)
-        else:
+        elif self.video_reader_backend == "decord":
             video_reader = decord.VideoReader(uri=path.as_posix())
             video_num_frames = len(video_reader)
             nearest_frame_bucket = min(
@@ -349,6 +373,31 @@ class VideoDatasetWithResizing(VideoDataset):
             frame_indices = list(range(0, video_num_frames, max(1, video_num_frames // nearest_frame_bucket)))
 
             frames = video_reader.get_batch(frame_indices).asnumpy()
+            frames = pad_last_frame(frames, nearest_frame_bucket).astype(np.float32)
+
+            nearest_res = self._find_nearest_resolution(frames.shape[2], frames.shape[3])
+            frames_resized = np.stack([vision.Resize(size=nearest_res)(frame) for frame in frames], axis=0)
+            frames_resized = np.ascontiguousarray(frames_resized.transpose(0, 3, 1, 2))  # (T, H, W, C) -> (T, C, H, W)
+            frames = np.stack([self.video_transforms(frame) for frame in frames_resized], axis=0)
+
+            image = frames[:1].copy() if self.image_to_video else None
+
+            return image, frames, None
+        elif self.video_reader_backend == "cv2":
+            video_reader = cv2.VideoCapture(path.as_posix(), apiPreference=cv2.CAP_FFMPEG)
+            if not video_reader.isOpened():
+                raise IOError(f"Video {path.as_posix()} cannot be opened.")
+
+            video_num_frames = int(video_reader.get(cv2.CAP_PROP_FRAME_COUNT))
+            nearest_frame_bucket = min(
+                self.frame_buckets, key=lambda x: abs(x - min(video_num_frames, self.max_num_frames))
+            )
+            frames = []
+            for i in range(0, video_num_frames, max(1, video_num_frames // nearest_frame_bucket)):
+                video_reader.set(cv2.CAP_PROP_POS_FRAMES, i)
+                ret, frame = video_reader.read()
+                frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            frames = np.stack(frames)
             frames = pad_last_frame(frames, nearest_frame_bucket).astype(np.float32)
 
             nearest_res = self._find_nearest_resolution(frames.shape[2], frames.shape[3])
@@ -402,7 +451,7 @@ class VideoDatasetWithResizeAndRectangleCrop(VideoDataset):
     def _preprocess_video(self, path: Path) -> np.ndarray:
         if self.load_tensors:
             return self._load_preprocessed_latents_and_embeds(path)
-        else:
+        elif self.video_reader_backend == "decord":
             video_reader = decord.VideoReader(uri=path.as_posix())
             video_num_frames = len(video_reader)
             nearest_frame_bucket = min(
@@ -412,6 +461,31 @@ class VideoDatasetWithResizeAndRectangleCrop(VideoDataset):
             frame_indices = list(range(0, video_num_frames, max(1, video_num_frames // nearest_frame_bucket)))
 
             frames = video_reader.get_batch(frame_indices).asnumpy()
+            frames = pad_last_frame(frames, nearest_frame_bucket).astype(np.float32)
+
+            nearest_res = self._find_nearest_resolution(frames.shape[2], frames.shape[3])
+            frames_resized = self._resize_for_rectangle_crop(frames, nearest_res)
+            frames_resized = np.ascontiguousarray(frames_resized.transpose(0, 3, 1, 2))  # (T, H, W, C) -> (T, C, H, W)
+            frames = np.stack([self.video_transforms(frame) for frame in frames_resized], axis=0)
+
+            image = frames[:1].copy() if self.image_to_video else None
+
+            return image, frames, None
+        elif self.video_reader_backend == "cv2":
+            video_reader = cv2.VideoCapture(path.as_posix(), apiPreference=cv2.CAP_FFMPEG)
+            if not video_reader.isOpened():
+                raise IOError(f"Video {path.as_posix()} cannot be opened.")
+
+            video_num_frames = int(video_reader.get(cv2.CAP_PROP_FRAME_COUNT))
+            nearest_frame_bucket = min(
+                self.frame_buckets, key=lambda x: abs(x - min(video_num_frames, self.max_num_frames))
+            )
+            frames = []
+            for i in range(0, video_num_frames, max(1, video_num_frames // nearest_frame_bucket)):
+                video_reader.set(cv2.CAP_PROP_POS_FRAMES, i)
+                ret, frame = video_reader.read()
+                frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            frames = np.stack(frames)
             frames = pad_last_frame(frames, nearest_frame_bucket).astype(np.float32)
 
             nearest_res = self._find_nearest_resolution(frames.shape[2], frames.shape[3])

@@ -363,6 +363,7 @@ def main(args):
         "attention_head_dim": transformer_config.attention_head_dim,
         "base_height": transformer_config.sample_height * VAE_SCALE_FACTOR_SPATIAL,
         "base_width": transformer_config.sample_width * VAE_SCALE_FACTOR_SPATIAL,
+        "video_reader_backend": args.dataset_backend,
     }
     if args.video_reshape_mode is None:
         train_dataset = VideoDatasetWithResizing(**dataset_init_kwargs)
