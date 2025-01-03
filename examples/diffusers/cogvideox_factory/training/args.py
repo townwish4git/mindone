@@ -32,6 +32,13 @@ def _get_model_args(parser: argparse.ArgumentParser) -> None:
 
 def _get_dataset_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
+        "--dataset_backend",
+        type=str,
+        default="cv2",
+        choices=["cv2", "decord"],
+        help=("Backend to read videos in dataset."),
+    )
+    parser.add_argument(
         "--data_root",
         type=str,
         default=None,
