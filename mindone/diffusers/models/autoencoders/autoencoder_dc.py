@@ -356,6 +356,7 @@ class Decoder(nn.Cell):
             up_blocks.insert(0, nn.SequentialCell(*up_block_list))
 
         self.up_blocks = nn.CellList(up_blocks)
+        self.num_up_blocks = len(self.up_blocks)
 
         channels = block_out_channels[0] if layers_per_block[0] > 0 else block_out_channels[1]
 
@@ -377,7 +378,8 @@ class Decoder(nn.Cell):
         else:
             hidden_states = self.conv_in(hidden_states)
 
-        for up_block in reversed(self.up_blocks):
+        for i in range(self.num_up_blocks):
+            up_block = self.up_blocks[self.num_up_blocks - i - 1]
             hidden_states = up_block(hidden_states)
 
         hidden_states = self.norm_out(hidden_states.movedim(1, -1)).movedim(-1, 1)

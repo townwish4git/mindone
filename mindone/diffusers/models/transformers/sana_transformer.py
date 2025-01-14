@@ -332,12 +332,12 @@ class SanaTransformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin):
             if hasattr(module, "get_processor"):
                 processors[f"{name}.processor"] = module.get_processor()
 
-            for sub_name, child in module.cells_and_names():
+            for sub_name, child in module.name_cells().items():
                 fn_recursive_add_processors(f"{name}.{sub_name}", child, processors)
 
             return processors
 
-        for name, module in self.cells_and_names():
+        for name, module in self.name_cells().items():
             fn_recursive_add_processors(name, module, processors)
 
         return processors
@@ -371,10 +371,10 @@ class SanaTransformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin):
                 else:
                     module.set_processor(processor.pop(f"{name}.processor"))
 
-            for sub_name, child in module.cells_and_names():
+            for sub_name, child in module.name_cells().items():
                 fn_recursive_attn_processor(f"{name}.{sub_name}", child, processor)
 
-        for name, module in self.cells_and_names():
+        for name, module in self.name_cells().items():
             fn_recursive_attn_processor(name, module, processor)
 
     def construct(
@@ -458,7 +458,7 @@ class SanaTransformer2DModel(ModelMixin, ConfigMixin, PeftAdapterMixin):
 
         # 5. Unpatchify
         hidden_states = hidden_states.reshape(
-            batch_size, post_patch_height, post_patch_width, self.config.patch_size, self.config.patch_size, -1
+            batch_size, post_patch_height, post_patch_width, self.config["patch_size"], self.config["patch_size"], -1
         )
         hidden_states = hidden_states.permute(0, 5, 1, 3, 2, 4)
         output = hidden_states.reshape(batch_size, -1, post_patch_height * p, post_patch_width * p)
