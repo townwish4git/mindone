@@ -76,13 +76,13 @@ class PAGMixin:
                     and not is_fake_integral_match(layer_id, name)
                 ):
                     logger.debug(f"Applying PAG to layer: {name}")
-                    target_modules.append(module)
+                    target_modules.append((name, module))
 
             if len(target_modules) == 0:
                 raise ValueError(f"Cannot find PAG layer to set attention processor for: {layer_id}")
 
-            for module in target_modules:
-                module.processor = pag_attn_proc
+            for name, module in target_modules:
+                module.set_processor(pag_attn_proc, root_cell=model, subcells=name)
 
     def _get_pag_scale(self, t):
         r"""

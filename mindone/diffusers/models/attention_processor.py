@@ -19,7 +19,7 @@ from mindspore import nn, ops
 
 from ..image_processor import IPAdapterMaskProcessor
 from ..utils import is_mindspore_version, logging
-from ..utils.mindspore_utils import dtype_to_min
+from ..utils.mindspore_utils import dtype_to_min, remove_lazy_inline
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -358,7 +358,7 @@ class Attention(nn.Cell):
 
         self.set_processor(processor)
 
-    def set_processor(self, processor: "AttnProcessor") -> None:
+    def set_processor(self, processor: "AttnProcessor", *, root_cell: nn.Cell = None, subcells: str = "") -> None:
         r"""
         Set the attention processor to use.
 
@@ -373,6 +373,9 @@ class Attention(nn.Cell):
             self._cells.pop("processor")
 
         self.processor = processor
+
+        if root_cell is not None:
+            remove_lazy_inline(root_cell, subcells)
 
     def get_processor(self) -> "AttentionProcessor":
         r"""
