@@ -376,35 +376,55 @@ def main():
     rank_dataset_size = len(dataset)
 
     # 3. Dataloader
-    def collate_fn(data):
-        prompts = [x["prompt"] for x in data]
-        prompts = np.stack(prompts)
-
-        text_input_ids = [x["text_input_ids"] for x in data]
-        text_input_ids = np.stack(text_input_ids)
-
-        videos = [x["video"] for x in data]
-        videos = np.stack(videos)
-
-        if args.save_image_latents:
-            images = [x["image"] for x in data]
-            images = np.stack(images)
-            return videos, prompts, text_input_ids, images
-        else:
-            return videos, prompts, text_input_ids
-
-    dataloader = GeneratorDataset(
-        dataset,
-        column_names=["examples"],
-        num_parallel_workers=args.dataloader_num_workers,
-    ).batch(
-        batch_size=1,
-        per_batch_map=lambda examples, batch_info: collate_fn(examples),
-        input_columns=["examples"],
-        output_columns=["videos", "prompts", "text_input_ids", "images"]
+    column_names = (
+        ["videos", "prompts", "text_input_ids", "images"]
         if args.save_image_latents
-        else ["videos", "prompts", "text_input_ids"],
+        else ["videos", "prompts", "text_input_ids"]
     )
+
+    if dataset.is_multi_resolutions:
+        element_length_function, bucket_boundaries, bucket_batch_sizes = dataset.prepare_bucket_sampler(1)
+
+        dataloader = GeneratorDataset(
+            dataset,
+            column_names=column_names,
+            num_parallel_workers=args.dataloader_num_workers,
+        ).bucket_batch_by_length(
+            column_names=column_names,
+            bucket_boundaries=bucket_boundaries,
+            bucket_batch_sizes=bucket_batch_sizes,
+            element_length_function=element_length_function,
+        )
+    else:
+
+        def collate_fn(data):
+            prompts = [x["prompt"] for x in data]
+            prompts = np.stack(prompts)
+
+            text_input_ids = [x["text_input_ids"] for x in data]
+            text_input_ids = np.stack(text_input_ids)
+
+            videos = [x["video"] for x in data]
+            videos = np.stack(videos)
+
+            if args.save_image_latents:
+                images = [x["image"] for x in data]
+                images = np.stack(images)
+                return videos, prompts, text_input_ids, images
+            else:
+                return videos, prompts, text_input_ids
+
+        dataloader = GeneratorDataset(
+            dataset,
+            column_names=["examples"],
+            num_parallel_workers=args.dataloader_num_workers,
+        ).batch(
+            batch_size=1,
+            per_batch_map=lambda examples, batch_info: collate_fn(examples),
+            input_columns=["examples"],
+            output_columns=column_names,
+        )
+
     dataloader_iter = dataloader.create_tuple_iterator()
 
     # 4. Compute latents and embeddings and save

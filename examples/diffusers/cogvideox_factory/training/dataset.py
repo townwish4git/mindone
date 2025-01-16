@@ -88,7 +88,10 @@ class VideoDataset(object):
         self.resolutions = [
             (f, h, w) for h in self.height_buckets for w in self.width_buckets for f in self.frame_buckets
         ]
+        self.is_multi_resolutions = len(self.resolutions) > 1
+
         # We prepare RoPE in dataset
+        self.ropes = {}
         self.prepare_ropes()
 
         # Two methods of loading data are supported.
@@ -160,7 +163,7 @@ class VideoDataset(object):
             height = video_latents.shape[2] * 8
             width = video_latents.shape[3] * 8
 
-            return {
+            example = {
                 "prompt": None,
                 "text_input_ids": prompt_embeds,
                 "image": image_latents,
@@ -170,7 +173,7 @@ class VideoDataset(object):
                     "height": height,
                     "width": width,
                 },
-                "rotary_positional_embeddings": self.ropes,
+                "rotary_positional_embeddings": self.get_rope(num_frames, height, width),
             }
         else:
             image, video, _ = self._preprocess_video(self.video_paths[index])
@@ -186,7 +189,7 @@ class VideoDataset(object):
             )
             text_input_ids = text_inputs.input_ids
 
-            return {
+            example = {
                 "prompt": prompt,
                 "text_input_ids": text_input_ids.squeeze(),
                 "image": image,
@@ -196,8 +199,20 @@ class VideoDataset(object):
                     "height": video.shape[2],
                     "width": video.shape[3],
                 },
-                "rotary_positional_embeddings": self.ropes,
+                "rotary_positional_embeddings": self.get_rope(video.shape[0], video.shape[2], video.shape[3]),
             }
+
+        if not self.is_multi_resolutions:
+            return example
+
+        # Multi resolutions will call `GeneratorDataset.bucket_batch_by_length`
+        # which requires return value of __getitem__ to be tuple of numpy.array
+        tuple_example = (example["video"], example["prompt"], example["text_input_ids"])
+        if self.image_to_video:
+            tuple_example += (example["image"],)
+        if self.use_rotary_positional_embeddings:
+            tuple_example += (example["rotary_positional_embeddings"],)
+        return tuple_example
 
     def _load_dataset_from_local_path(self) -> Tuple[List[str], List[str]]:
         if not self.data_root.exists():
@@ -307,29 +322,58 @@ class VideoDataset(object):
         return images, latents, embeds
 
     def prepare_ropes(self):
-        if len(self.resolutions) != 1:
-            raise NotImplementedError("Only support fixed frame and resolution now")
+        for f, h, w in self.resolutions:
+            num_frames = (f - 1) // 4 + 1
 
-        f, h, w = self.resolutions[0]
-        num_frames = (f - f % 2) / 4 + f % 2
-
-        image_rotary_emb = (
-            prepare_rotary_positional_embeddings(
-                height=h,
-                width=w,
-                num_frames=int(num_frames),
-                vae_scale_factor_spatial=self.vae_scale_factor_spatial,
-                patch_size=self.patch_size,
-                patch_size_t=self.patch_size_t,
-                attention_head_dim=self.attention_head_dim,
-                base_height=self.base_height,
-                base_width=self.base_width,
+            image_rotary_emb = (
+                prepare_rotary_positional_embeddings(
+                    height=h,
+                    width=w,
+                    num_frames=num_frames,
+                    vae_scale_factor_spatial=self.vae_scale_factor_spatial,
+                    patch_size=self.patch_size,
+                    patch_size_t=self.patch_size_t,
+                    attention_head_dim=self.attention_head_dim,
+                    base_height=self.base_height,
+                    base_width=self.base_width,
+                )
+                if self.use_rotary_positional_embeddings
+                else None
             )
-            if self.use_rotary_positional_embeddings
-            else None
-        )
 
-        self.ropes = image_rotary_emb
+            self.ropes[(num_frames, h, w)] = image_rotary_emb
+
+    def get_rope(self, frames: int, height: int, width: int):
+        return self.ropes[((frames - 1) // 4 + 1, height, width)]
+
+    def _get_fhw(self, video):
+        if not self.load_tensors:
+            return (video.shape[0], video.shape[2], video.shape[3])
+
+        latent_num_frames = video.shape[1]
+        if latent_num_frames % 2 == 0:
+            num_frames = latent_num_frames * 4
+        else:
+            num_frames = (latent_num_frames - 1) * 4 + 1
+
+        height = video.shape[2] * 8
+        width = video.shape[3] * 8
+
+        return (num_frames, height, width)
+
+    def prepare_bucket_sampler(self, bs: int):
+        resolutions_inverted_index = {}
+        for idx, res in enumerate(self.resolutions):
+            resolutions_inverted_index[res] = idx + 1
+
+        def element_length_function(video, *args):
+            return resolutions_inverted_index[self._get_fhw(video)]
+
+        bucket_boundaries = list(range(1, len(self.resolutions)))
+
+        bucket_batch_sizes = [bs] * len(self.resolutions)
+
+        return element_length_function, bucket_boundaries, bucket_batch_sizes
 
 
 class VideoDatasetWithResizing(VideoDataset):
