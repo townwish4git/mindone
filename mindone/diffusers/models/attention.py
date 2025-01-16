@@ -180,9 +180,12 @@ class JointTransformerBlock(nn.Cell):
         hidden_states = hidden_states + ff_output
 
         # Process attention outputs for the `encoder_hidden_states`.
-        if self.context_pre_only:
-            encoder_hidden_states = None
-        else:
+        # FIXME: In original diffusers codes, `encoder_hidden_states` will be set to `None` when `self.context_pre_only`
+        #        is `True`, however, returning `None` will result in problems about recomputing in MindSpore. Given that:
+        #            1. Only the last layer of SD3 DiT will have `context_pre_only` whose value is `True`;
+        #            2. return value of `encoder_hidden_states` will NOT be used after last layer
+        #        Thus, we do nothing to `encoder_hidden_states` when `self.context_pre_only` is `True`
+        if not self.context_pre_only:
             context_attn_output = c_gate_msa.unsqueeze(1) * context_attn_output
             encoder_hidden_states = encoder_hidden_states + context_attn_output
 
