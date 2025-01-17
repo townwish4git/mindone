@@ -185,6 +185,9 @@ class JointTransformerBlock(nn.Cell):
         self._chunk_dim = dim
 
     def construct(self, hidden_states: ms.Tensor, encoder_hidden_states: ms.Tensor, temb: ms.Tensor):
+        # make complier happy
+        norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp, norm_hidden_states2, gate_msa2 = (None,) * 7
+
         if self.use_dual_attention:
             norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp, norm_hidden_states2, gate_msa2 = self.norm1(
                 hidden_states, emb=temb
