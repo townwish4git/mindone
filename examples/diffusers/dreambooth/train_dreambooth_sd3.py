@@ -34,8 +34,8 @@ from transformers import CLIPTokenizer, PretrainedConfig, T5TokenizerFast
 
 import mindspore as ms
 from mindspore import nn, ops
-from mindspore.amp import StaticLossScaler
 from mindspore.dataset import GeneratorDataset, transforms, vision
+from mindspore.nn.wrap.loss_scale import DynamicLossScaleUpdateCell
 
 from mindone.diffusers import (
     AutoencoderKL,
@@ -46,11 +46,12 @@ from mindone.diffusers import (
 from mindone.diffusers.optimization import get_scheduler
 from mindone.diffusers.training_utils import (
     AttrJitWrapper,
-    TrainStep,
     compute_density_for_timestep_sampling,
     compute_loss_weighting_for_sd3,
     init_distributed_device,
+    is_local_master,
     is_master,
+    prepare_train_network,
     pynative_no_grad,
     set_seed,
 )
@@ -387,16 +388,6 @@ def parse_args(input_args=None):
         help="Number of subprocesses to use for data loading.",
     )
     parser.add_argument(
-        "--enable_mindspore_data_sink",
-        action="store_true",
-        help=(
-            "Whether or not to enable `Data Sinking` feature from MindData which boosting data "
-            "fetching and transferring from host to device. For more information, see "
-            "https://www.mindspore.cn/tutorials/experts/en/r2.2/optimize/execution_opt.html#data-sinking. "
-            "Note: To avoid breaking the iteration logic of the training, the size of data sinking is set to 1."
-        ),
-    )
-    parser.add_argument(
         "--weighting_scheme",
         type=str,
         default="logit_normal",
@@ -529,7 +520,59 @@ def parse_args(input_args=None):
             " 1.10.and an Nvidia Ampere GPU.  Default to  fp16 if a GPU is available else fp32."
         ),
     )
+
+    # MindSpore-relatived Arguments
     parser.add_argument("--distributed", default=False, action="store_true", help="Enable distributed training")
+    parser.add_argument(
+        "--enable_mindspore_data_sink",
+        action="store_true",
+        help=(
+            "Whether or not to enable `Data Sinking` feature from MindData which boosting data "
+            "fetching and transferring from host to device. For more information, see "
+            "https://www.mindspore.cn/tutorials/experts/en/r2.2/optimize/execution_opt.html#data-sinking. "
+            "Note: To avoid breaking the iteration logic of the training, the size of data sinking is set to 1."
+        ),
+    )
+    parser.add_argument(
+        "--mindspore_mode",
+        type=int,
+        default=0,
+        choices=[0, 1],
+        help="Forms of MindSpore programming execution, 0 means static graph mode and 1 means dynamic graph mode.",
+    )
+    parser.add_argument(
+        "--jit_level",
+        type=str,
+        default="O1",
+        choices=["O0", "O1", "O2"],
+        help=(
+            "Used to control the compilation optimization level, supports [O0, O1, O2]. The framework automatically "
+            "selects the execution method. O0: All optimizations except those necessary for functionality are "
+            "disabled, using an operator-by-operator execution method. O1: Enables common optimizations and automatic "
+            "operator fusion optimizations, using an operator-by-operator execution method. This is an experimental "
+            "optimization level, which is continuously being improved. O2: Enables extreme performance optimization, "
+            "using a sinking execution method. Only effective when args.mindspore_mode is 0"
+        ),
+    )
+    parser.add_argument(
+        "--amp_level",
+        type=str,
+        default="O2",
+        choices=["O0", "O1", "O2", "O3"],
+        help=(
+            "Level of auto mixed precision(amp). Supports [O0, O1, O2, O3]. O0: Do not change. O1: Convert cells"
+            "and operators in whitelist to lower precision operations, and keep full precision operations for "
+            "the rest. O2: Keep full precision operations for cells and operators in blacklist, and convert "
+            "the rest to lower precision operations. O3: Cast network to lower precision."
+        ),
+    )
+    parser.add_argument(
+        "--zero_stage",
+        type=int,
+        default=0,
+        choices=[0, 1, 2, 3],
+        help="ZeRO-Stage in data parallel.",
+    )
 
     if input_args is not None:
         args = parser.parse_args(input_args)
@@ -817,10 +860,11 @@ def tokenize_prompt(tokenizer, prompt, max_sequence_length=77, **tokenizer_kwarg
 
 def main():
     args = parse_args()
+
+    # Init context about MindSpore
     ms.set_context(
-        mode=ms.GRAPH_MODE,
-        jit_syntax_level=ms.STRICT,
-        jit_config={"jit_level": "O2"},
+        mode=args.mindspore_mode,
+        jit_config={"jit_level": args.jit_level},
     )
 
     # read attr distributed, writer attrs rank/local_rank/world_size:
@@ -1041,6 +1085,21 @@ def main():
 
             del load_model
 
+    # filter unnecessary optimizer state for loading & saving state
+    def optimizer_state_filter(param_name: str):
+        # Saving optimizer directly will save all trainable parameters of transformer model besides
+        # optimizer states, we set `choice_func` of mindspore.save_checkpoint(optimizer) to `optimizer_state_filter`
+        # to NOT save & load these parameters since they will be updated automatically when `load_model_hook`
+        # and are unnecessary to save and load. This saves a lot of disk space.
+        transformer_cond = not param_name.startswith("transformer.")
+        text_encoders_cond = (
+            not param_name.startswith("text_encoder_one.")
+            and not param_name.startswith("text_encoder_two.")
+            and not param_name.startswith("text_encoder_three.")
+        )
+        cond = transformer_cond if args.train_text_encoder else transformer_cond and text_encoders_cond
+        return cond
+
     # Define models to load or save for load_model_hook() and save_model_hook()
     models = [transformer]
     if args.train_text_encoder:
@@ -1177,6 +1236,54 @@ def main():
         eps=args.adam_epsilon,
     )
 
+    # create train_step for training
+    network_with_loss = SD3DBNetworkWithLoss(
+        vae=vae,
+        text_encoder_one=text_encoder_one,
+        text_encoder_two=text_encoder_two,
+        text_encoder_three=text_encoder_three,
+        transformer=transformer,
+        noise_scheduler=noise_scheduler_copy,
+        weight_dtype=weight_dtype,
+        args=args,
+        tokens_one=tokens_one,
+        tokens_two=tokens_two,
+        tokens_three=tokens_three,
+        custom_instance_prompts=train_dataset.custom_instance_prompts,
+    ).set_train(True)
+
+    loss_scaler = DynamicLossScaleUpdateCell(loss_scale_value=65536.0, scale_factor=2, scale_window=2000)
+    train_step = prepare_train_network(
+        network_with_loss,
+        optimizer=optimizer,
+        scale_sense=loss_scaler,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        clip_grad=True,
+        clip_norm=args.max_grad_norm,
+        zero_stage=args.zero_stage,
+    )
+
+    if args.enable_mindspore_data_sink:
+        sink_process = ms.data_sink(train_step, train_dataloader)
+    else:
+        sink_process = None
+
+    # create pipeline for validation
+    pipeline = StableDiffusion3Pipeline.from_pretrained(
+        args.pretrained_model_name_or_path,
+        vae=vae,
+        tokenizer=tokenizer_one,
+        tokenizer_2=tokenizer_two,
+        text_encoder=text_encoder_one,
+        text_encoder_2=text_encoder_two,
+        text_encoder_3=text_encoder_three,
+        tokenizer_3=tokenizer_three,
+        transformer=transformer,
+        revision=args.revision,
+        variant=args.variant,
+        mindspore_dtype=weight_dtype,
+    )
+
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     if overrode_max_train_steps:
@@ -1233,51 +1340,13 @@ def main():
                 logger.info(f"Resuming from checkpoint {path}")
             # TODO: load optimizer & grad scaler etc. like accelerator.load_state
             load_model_hook(models, os.path.join(args.output_dir, path))
+            train_step.load_state(args, os.path.join(args.output_dir, path), optimizer_state_filter)
             global_step = int(path.split("-")[1])
 
             initial_global_step = global_step
             first_epoch = global_step // num_update_steps_per_epoch
     else:
         initial_global_step = 0
-
-    # create train_step for training
-    train_step = TrainStepForSD3DB(
-        vae=vae,
-        text_encoder_one=text_encoder_one,
-        text_encoder_two=text_encoder_two,
-        text_encoder_three=text_encoder_three,
-        transformer=transformer,
-        optimizer=optimizer,
-        noise_scheduler=noise_scheduler_copy,
-        weight_dtype=weight_dtype,
-        length_of_dataloader=len(train_dataloader),
-        args=args,
-        tokens_one=tokens_one,
-        tokens_two=tokens_two,
-        tokens_three=tokens_three,
-        custom_instance_prompts=train_dataset.custom_instance_prompts,
-    ).set_train()
-
-    if args.enable_mindspore_data_sink:
-        sink_process = ms.data_sink(train_step, train_dataloader)
-    else:
-        sink_process = None
-
-    # create pipeline for validation
-    pipeline = StableDiffusion3Pipeline.from_pretrained(
-        args.pretrained_model_name_or_path,
-        vae=vae,
-        tokenizer=tokenizer_one,
-        tokenizer_2=tokenizer_two,
-        text_encoder=text_encoder_one,
-        text_encoder_2=text_encoder_two,
-        text_encoder_3=text_encoder_three,
-        tokenizer_3=tokenizer_three,
-        transformer=transformer,
-        revision=args.revision,
-        variant=args.variant,
-        mindspore_dtype=weight_dtype,
-    )
 
     progress_bar = tqdm(
         range(0, args.max_train_steps),
@@ -1306,12 +1375,12 @@ def main():
                 loss, model_pred = train_step(*batch)
 
             # Checks if the accelerator has performed an optimization step behind the scenes
-            if train_step.sync_gradients:
+            if train_step.accum_steps == 1 or train_step.cur_accum_step.item() == 0:
                 progress_bar.update(1)
                 global_step += 1
 
-                if is_master(args):
-                    if global_step % args.checkpointing_steps == 0:
+                if global_step % args.checkpointing_steps == 0:
+                    if is_local_master(args):
                         # _before_ saving state, check if this save would set us over the `checkpoints_total_limit`
                         if args.checkpoints_total_limit is not None:
                             checkpoints = os.listdir(args.output_dir)
@@ -1336,6 +1405,7 @@ def main():
                         # TODO: save optimizer & grad scaler etc. like accelerator.save_state
                         os.makedirs(save_path, exist_ok=True)
                         save_model_hook(models, save_path)
+                        train_step.save_state(args, save_path, optimizer_state_filter)
                         logger.info(f"Saved state to {save_path}")
 
             log_lr = optimizer.get_lr()
@@ -1402,7 +1472,7 @@ def compute_weighting_mse_loss(weighting, pred, target):
     return weighting_mse_loss
 
 
-class TrainStepForSD3DB(TrainStep):
+class SD3DBNetworkWithLoss(nn.Cell):
     def __init__(
         self,
         vae: nn.Cell,
@@ -1410,24 +1480,15 @@ class TrainStepForSD3DB(TrainStep):
         text_encoder_two: nn.Cell,
         text_encoder_three: nn.Cell,
         transformer: nn.Cell,
-        optimizer: nn.Optimizer,
         noise_scheduler,
         weight_dtype,
-        length_of_dataloader,
         args,
         tokens_one,
         tokens_two,
         tokens_three,
         custom_instance_prompts,
     ):
-        super().__init__(
-            transformer,
-            optimizer,
-            StaticLossScaler(4096),
-            args.max_grad_norm,
-            args.gradient_accumulation_steps,
-            gradient_accumulation_kwargs=dict(length_of_dataloader=length_of_dataloader),
-        )
+        super().__init__()
         self.transformer = transformer
         self.vae = vae
         self.vae_dtype = vae.dtype
@@ -1511,6 +1572,16 @@ class TrainStepForSD3DB(TrainStep):
 
         return prompt_embeds, pooled_prompt_embeds
 
+    def diagonal_gaussian_distribution_sample(self, latent_dist: ms.Tensor) -> ms.Tensor:
+        mean, logvar = ops.chunk(latent_dist, 2, axis=1)
+        logvar = ops.clamp(logvar, -30.0, 20.0)
+        std = ops.exp(0.5 * logvar)
+
+        sample = ops.randn_like(mean, dtype=mean.dtype)
+        x = mean + std * sample
+
+        return x
+
     def get_sigmas(self, indices, n_dim=4, dtype=ms.float32):
         """
         origin `get_sigmas` which uses timesteps to get sigmas might be not supported
@@ -1522,7 +1593,7 @@ class TrainStepForSD3DB(TrainStep):
             sigma = sigma.unsqueeze(-1)
         return sigma
 
-    def forward(self, pixel_values, tokens_one, tokens_two, tokens_three):
+    def construct(self, pixel_values, tokens_one, tokens_two, tokens_three):
         pixel_values = pixel_values.to(dtype=self.vae_dtype)
 
         # encode batch prompts when custom prompts are provided for each image
@@ -1540,7 +1611,7 @@ class TrainStepForSD3DB(TrainStep):
 
         # Convert images to latent space
         with pynative_no_grad():
-            model_input = self.vae.diag_gauss_dist.sample(self.vae.encode(pixel_values)[0])
+            model_input = self.diagonal_gaussian_distribution_sample(self.vae.encode(pixel_values)[0])
             model_input = (model_input - self.vae_scaling_factor) * self.vae_scaling_factor
             model_input = model_input.to(dtype=self.weight_dtype)
 
@@ -1606,7 +1677,6 @@ class TrainStepForSD3DB(TrainStep):
             # Add the prior loss to the instance loss.
             loss = loss + self.args.prior_loss_weight * prior_loss
 
-        loss = self.scale_loss(loss)
         return loss, model_pred
 
 
