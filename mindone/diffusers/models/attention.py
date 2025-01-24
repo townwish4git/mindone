@@ -102,6 +102,7 @@ class JointTransformerBlock(nn.Cell):
             processing of `context` conditions.
     """
 
+    @ms.lazy_inline
     def __init__(
         self,
         dim: int,
