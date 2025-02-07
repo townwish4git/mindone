@@ -51,6 +51,7 @@ from mindone.diffusers.training_utils import (
     compute_loss_weighting_for_sd3,
     init_distributed_device,
     is_master,
+    pynative_no_grad,
     set_seed,
 )
 from mindone.transformers import CLIPTextModelWithProjection, T5EncoderModel
@@ -87,8 +88,9 @@ def log_validation(
     )
 
     # run inference
-    generator = None if args.seed is None else np.random.Generator(np.random.PCG64(seed=args.seed))
-    images = [pipeline(**pipeline_args, generator=generator)[0][0] for _ in range(args.num_validation_images)]
+    with pynative_no_grad():
+        generator = None if args.seed is None else np.random.Generator(np.random.PCG64(seed=args.seed))
+        images = [pipeline(**pipeline_args, generator=generator)[0][0] for _ in range(args.num_validation_images)]
 
     phase_name = "test" if is_final_validation else "validation"
     if is_master(args):
@@ -1477,35 +1479,36 @@ class TrainStepForSD3DB(TrainStep):
         text_input_ids_three,
         num_images_per_prompt: int = 1,
     ):
-        # text encoder one
-        prompt_embeds_one = self.text_encoder_one(text_input_ids_one, output_hidden_states=True)
-        pooled_prompt_embeds_one = prompt_embeds_one[0]
-        prompt_embeds_one = prompt_embeds_one[-1][-2]
-        prompt_embeds_one = prompt_embeds_one.to(dtype=self.text_encoder_dtype)
-        prompt_embeds_one = prompt_embeds_one.tile((num_images_per_prompt, 1, 1))
+        with pynative_no_grad():
+            # text encoder one
+            prompt_embeds_one = self.text_encoder_one(text_input_ids_one, output_hidden_states=True)
+            pooled_prompt_embeds_one = prompt_embeds_one[0]
+            prompt_embeds_one = prompt_embeds_one[-1][-2]
+            prompt_embeds_one = prompt_embeds_one.to(dtype=self.text_encoder_dtype)
+            prompt_embeds_one = prompt_embeds_one.tile((num_images_per_prompt, 1, 1))
 
-        # text encoder two
-        prompt_embeds_two = self.text_encoder_two(text_input_ids_two, output_hidden_states=True)
-        pooled_prompt_embeds_two = prompt_embeds_two[0]
-        prompt_embeds_two = prompt_embeds_two[-1][-2]
-        prompt_embeds_two = prompt_embeds_two.to(dtype=self.text_encoder_dtype)
-        prompt_embeds_two = prompt_embeds_two.tile((num_images_per_prompt, 1, 1))
+            # text encoder two
+            prompt_embeds_two = self.text_encoder_two(text_input_ids_two, output_hidden_states=True)
+            pooled_prompt_embeds_two = prompt_embeds_two[0]
+            prompt_embeds_two = prompt_embeds_two[-1][-2]
+            prompt_embeds_two = prompt_embeds_two.to(dtype=self.text_encoder_dtype)
+            prompt_embeds_two = prompt_embeds_two.tile((num_images_per_prompt, 1, 1))
 
-        # CLIPs
-        clip_prompt_embeds = ops.cat([prompt_embeds_one, prompt_embeds_two], axis=-1)
-        pooled_prompt_embeds = ops.cat([pooled_prompt_embeds_one, pooled_prompt_embeds_two], axis=-1)
+            # CLIPs
+            clip_prompt_embeds = ops.cat([prompt_embeds_one, prompt_embeds_two], axis=-1)
+            pooled_prompt_embeds = ops.cat([pooled_prompt_embeds_one, pooled_prompt_embeds_two], axis=-1)
 
-        # T5 (text encoder three)
-        t5_prompt_embed = self._encode_prompt_with_t5(
-            text_input_ids_three,
-            num_images_per_prompt=num_images_per_prompt,
-        )
+            # T5 (text encoder three)
+            t5_prompt_embed = self._encode_prompt_with_t5(
+                text_input_ids_three,
+                num_images_per_prompt=num_images_per_prompt,
+            )
 
-        # integreted
-        clip_prompt_embeds = ops.Pad(
-            paddings=((0, 0), (0, 0), (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1]))
-        )(clip_prompt_embeds)
-        prompt_embeds = ops.cat([clip_prompt_embeds, t5_prompt_embed], axis=-2)
+            # integreted
+            clip_prompt_embeds = ops.Pad(
+                paddings=((0, 0), (0, 0), (0, t5_prompt_embed.shape[-1] - clip_prompt_embeds.shape[-1]))
+            )(clip_prompt_embeds)
+            prompt_embeds = ops.cat([clip_prompt_embeds, t5_prompt_embed], axis=-2)
 
         return prompt_embeds, pooled_prompt_embeds
 
@@ -1537,9 +1540,10 @@ class TrainStepForSD3DB(TrainStep):
             prompt_embeds, pooled_prompt_embeds = self.encode_prompt(tokens_one, tokens_two, tokens_three)
 
         # Convert images to latent space
-        model_input = self.vae.diag_gauss_dist.sample(self.vae.encode(pixel_values)[0])
-        model_input = (model_input - self.vae_shift_factor) * self.vae_scaling_factor
-        model_input = model_input.to(dtype=self.weight_dtype)
+        with pynative_no_grad():
+            model_input = self.vae.diag_gauss_dist.sample(self.vae.encode(pixel_values)[0])
+            model_input = (model_input - self.vae_shift_factor) * self.vae_scaling_factor
+            model_input = model_input.to(dtype=self.weight_dtype)
 
         # Sample noise that we'll add to the latents
         noise = ops.randn_like(model_input, dtype=model_input.dtype)
