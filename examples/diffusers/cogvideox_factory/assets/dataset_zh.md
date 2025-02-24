@@ -69,3 +69,37 @@ huggingface-cli download --repo-type dataset Wild-Heart/Disney-VideoGeneration-D
 该数据集已按照预期格式准备好，可直接使用。但是，直接使用原始的视频数据集可能会导致较小内存的设备出现内存不足的报错，因为它需要加载 [VAE](https://huggingface.co/THUDM/CogVideoX-5b/tree/main/vae)（将视频编码至潜在空间）和大型 [T5-XXL](https://huggingface.co/google/t5-v1_1-xxl/)文本编码器。为了降低内存需求，您可以使用 `training/prepare_dataset.py` 脚本预先计算潜变量和词向量。
 
 填写或修改 `prepare_dataset.sh` 中的参数并执行它以获得预先计算的潜变量和词向量（请确保指定 `--save_latents_and_embeddings`以保存预计算结果）。如果准备从图像生成视频的训练，请确保传递 `--save_image_latents`以同时编码并存储图像与视频的潜变量。在训练期间使用这些工件时，确保指定 `--load_tensors` 标志，否则将直接使用视频并需要加载文本编码器和VAE。该脚本支持并行，以便可以使用多个设备并行编码大型数据集（修改 `NUM_NPUS` 参数）。
+
+### 分桶训练
+#### 启用分桶训练
+启动分桶训练，把train_text_to_video_sp_sft.sh文件的ENABLE_DYNAMIC_SHAPE设置为1即可；分桶文件的默认路径为training/bucket.yaml；
+用户可根据模型规模及硬件环境，在shell脚本里设置bucket_config参数做调整。
+
+#### 分桶配置
+默认配置为
+```yaml
+bucket_config:
+  # Structure: "resolution": { num_frames: [ keep_prob, batch_size ] }
+  # Setting [ keep_prob, batch_size ] to [ 0.0, 0 ] forces longer videos into smaller resolution buckets
+  "144p": { 1: [ 1.0, 475 ], 48: [1.0, 44], 96: [1.0, 20], 200: [1.0, 8], 376: [1.0, 6]}
+  "256": { 1: [ 0.5, 297 ], 48: [1.0, 22], 96: [1.0, 7], 200: [1.0, 4], 376: [1.0, 3]}
+  "240p": { 1: [ 0.5, 297 ], 48: [1.0, 15], 96: [1.0, 7], 200: [1.0, 3], 376: [1.0, 2]}
+  "360p": { 1: [ 0.5, 141 ], 48: [1.0, 6], 96: [1.0, 3], 200: [1.0, 1], 376: [1.0, 1]}
+  "512": { 1: [ 0.5, 141 ], 48: [0.2, 6], 96: [0.6, 3], 200: [1.0, 1], 376: [1.0, 1]}
+  "480p": { 1: [ 0.5, 89 ], 48: [0.4, 3], 96: [0.3, 2], 200: [1.0, 1], 376: [1.0, 1]}
+  "720p": { 1: [ 0.1, 36 ], 48: [0.2, 1] , 80: [0.4, 1] }
+  "1024": { 1: [ 0.1, 36 ], 48: [0.2, 1] , 80: [0.3, 1] }
+  "1080p": { 1: [ 0.01, 5 ]}
+  "2048": { 1: [ 0.01, 5 ] }
+```
+配置结构 "resolution": { num_frames: [ keep_prob, batch_size ] }；
+resolution：为分辨率；num_frames为改桶的训练的视频帧数；keep_prob为视频满足改桶的分辨率和帧数要求的情况下，分配到桶的概率；batch_size为该桶训练时的batch_size。
+
+配置规则：
+- 如果开SP训练，num_frames需为8的倍数；不开SP，需满足公式((num_frames - 1) //4 + 1) % 2 == 0
+- 尽可能保证不同卡计算负载均衡
+  - 各个桶的配置resolution*num_frames*batch_size尽可能相近；比如1080p的分辨率是720p的约2倍，在相同帧数的情况下720p的batch_size可以设置为1080p的两倍。
+  - 针对数据集分布不均衡的场景，可以降低大分辨率的keep_prob，让部分视频减少分辨率, 增大batch_size进行训练
+
+#### 分桶算法
+请参考[Open-Sora](https://github.com/hpcaitech/Open-Sora/blob/main/docs/zh_CN/report_v2.md#%E6%94%AF%E6%8C%81%E4%B8%8D%E5%90%8C%E8%A7%86%E9%A2%91%E9%95%BF%E5%BA%A6%E5%88%86%E8%BE%A8%E7%8E%87%E5%AE%BD%E9%AB%98%E6%AF%94%E5%B8%A7%E7%8E%87fps%E8%AE%AD%E7%BB%83)
