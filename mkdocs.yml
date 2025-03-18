@@ -1,8 +1,8 @@
 site_name: MindOne - One for All
 
-site_url: https://mindspore-lab.github.io/mindone
-repo_url: https://github.com/mindspore-lab/mindone
-repo_name: mindspore-lab/mindone
+site_url: https://townwish4git.github.io/mindone
+repo_url: https://github.com/townwish4git/mindone
+repo_name: townwish4git/mindone
 copyright: Copyright &copy; 2023 - 2024 MindSpore Lab
 
 nav:
@@ -112,8 +112,8 @@ extra:
     provider: mike
   social:
     - icon: fontawesome/solid/paper-plane
-      link: mailto:mindspore-lab@huawei.com
+      link: mailto:townwish4git@huawei.com
     - icon: fontawesome/brands/github
-      link: https://github.com/mindspore-lab/mindone
+      link: https://github.com/townwish4git/mindone
     - icon: fontawesome/brands/zhihu
       link: https://www.zhihu.com/people/mindsporelab

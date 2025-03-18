@@ -2,10 +2,10 @@ name: docs
 on:
   push:
     branches:
-      - master
+      - hatch_bgd
   pull_request:
     branches:
-      - master
+      - hatch_bgd
 
 permissions:
   contents: write
@@ -27,7 +27,7 @@ jobs:
       - name: Build site
         run: hatch run mkdocs build
       - name: Deploy to gh-pages
-        if: github.event_name == 'push' && github.repository == 'mindspore-lab/mindone'
+        if: github.event_name == 'push' && github.repository == 'townwish4git/mindone'
         run: |
           git config --global user.name MkDocs Deployer
           git config --global user.email mkdocs@bot.com

@@ -5,9 +5,9 @@ name: CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "hatch_bgd" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "hatch_bgd" ]
 
 permissions:
   contents: read
