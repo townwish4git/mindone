@@ -190,9 +190,9 @@ class HunyuanVideoTokenReplaceAdaLayerNormZero(nn.Cell):
         emb = self.linear(self.silu(emb))
         token_replace_emb = self.linear(self.silu(token_replace_emb))
 
-        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, dim=1)
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
         tr_shift_msa, tr_scale_msa, tr_gate_msa, tr_shift_mlp, tr_scale_mlp, tr_gate_mlp = token_replace_emb.chunk(
-            6, dim=1
+            6, axis=1
         )
 
         norm_hidden_states = self.norm(hidden_states)
@@ -241,8 +241,8 @@ class HunyuanVideoTokenReplaceAdaLayerNormZeroSingle(nn.Cell):
         emb = self.linear(self.silu(emb))
         token_replace_emb = self.linear(self.silu(token_replace_emb))
 
-        shift_msa, scale_msa, gate_msa = emb.chunk(3, dim=1)
-        tr_shift_msa, tr_scale_msa, tr_gate_msa = token_replace_emb.chunk(3, dim=1)
+        shift_msa, scale_msa, gate_msa = emb.chunk(3, axis=1)
+        tr_shift_msa, tr_scale_msa, tr_gate_msa = token_replace_emb.chunk(3, axis=1)
 
         norm_hidden_states = self.norm(hidden_states)
         hidden_states_zero = (
