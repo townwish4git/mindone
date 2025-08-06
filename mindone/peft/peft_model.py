@@ -352,6 +352,7 @@ class PeftModel(PushToHubMixin, nn.Cell):
         is_trainable: bool = False,
         config: Optional[PeftConfig] = None,
         autocast_adapter_dtype: bool = True,
+        ephemeral_gpu_offload: bool = False,
         **kwargs: Any,
     ) -> PeftModel:
         r"""
@@ -380,6 +381,12 @@ class PeftModel(PushToHubMixin, nn.Cell):
                 loaded before calling `from_pretrained`.
             autocast_adapter_dtype (`bool`, *optional*):
                 Whether to autocast the adapter dtype. Defaults to `True`. Only relevant for specific adapter types.
+            ephemeral_gpu_offload (`bool`, *optional*):
+                Whether to use ephemeral GPU offloading for partially loaded modules. Defaults to `False`. This is
+                useful when parts of the model and/or components (such as adapters) are kept in CPU memory until they
+                are needed. Rather than perform expensive operations on small data, the data is transferred to the GPU
+                on-demand, the operation(s) performed, and the results moved back to CPU memory. This brings a slight
+                momentary VRAM overhead but gives orders of magnitude speedup in certain cases.
             kwargs: (`optional`):
                 Additional keyword arguments passed along to the specific PEFT configuration class.
         """
