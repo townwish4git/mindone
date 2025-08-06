@@ -18,7 +18,7 @@
 
 from mindspore import mint
 
-from mindone.transformers import BloomPreTrainedModel
+# from mindone.transformers import BloomPreTrainedModel
 
 
 # needed for prefix-tuning of bloom model
@@ -50,11 +50,11 @@ TRANSFORMERS_MODELS_TO_PREFIX_TUNING_POSTPROCESS_MAPPING = {
     "gpt_bigcode": starcoder_model_postprocess_past_key_value,
 }
 
-if hasattr(BloomPreTrainedModel, "_convert_to_standard_cache"):
-    # special handling for bloom architecture was fixed in:
-    # https://github.com/huggingface/transformers/pull/31445
-    # the _convert_to_standard_cache method is removed in the PR and thus serves as an indicator
-    TRANSFORMERS_MODELS_TO_PREFIX_TUNING_POSTPROCESS_MAPPING["bloom"] = bloom_model_postprocess_past_key_value
+# if hasattr(BloomPreTrainedModel, "_convert_to_standard_cache"):
+#     # special handling for bloom architecture was fixed in:
+#     # https://github.com/huggingface/transformers/pull/31445
+#     # the _convert_to_standard_cache method is removed in the PR and thus serves as an indicator
+#     TRANSFORMERS_MODELS_TO_PREFIX_TUNING_POSTPROCESS_MAPPING["bloom"] = bloom_model_postprocess_past_key_value
 
 TRANSFORMERS_MODELS_TO_LNTUNING_TARGET_MODULES_MAPPING = {
     "llama": ["input_layernorm", "post_attention_layernorm", "norm"],
