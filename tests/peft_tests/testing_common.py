@@ -1037,7 +1037,7 @@ class PeftCommonTester:
             model = get_peft_model(model, config)
             model.add_adapter(adapter_to_delete, config)
             model.set_adapter(adapter_to_delete)
-                        model.delete_adapter(adapter_to_delete)
+            model.delete_adapter(adapter_to_delete)
             assert adapter_to_delete not in model.peft_config
             assert model.active_adapters == ["default"]
 
