@@ -32,9 +32,8 @@ class TestPeftAutoModel:
     dtype = ms.bfloat16
 
     def test_peft_causal_lm(self):
-        model_id = "peft-internal-testing/tiny-OPTForCausalLM-lora"
-        load_kwargs = {"revision": "refs/pr/2"}
-        model = AutoPeftModelForCausalLM.from_pretrained(model_id, **load_kwargs)
+        model_id = "townwish/tiny-OPTForCausalLM-lora"
+        model = AutoPeftModelForCausalLM.from_pretrained(model_id)
         assert isinstance(model, PeftModelForCausalLM)
 
         with tempfile.TemporaryDirectory() as tmp_dirname:
@@ -44,16 +43,14 @@ class TestPeftAutoModel:
             assert isinstance(model, PeftModelForCausalLM)
 
         # check if kwargs are passed correctly
-        model = AutoPeftModelForCausalLM.from_pretrained(model_id, mindspore_dtype=self.dtype, **load_kwargs)
+        model = AutoPeftModelForCausalLM.from_pretrained(model_id, mindspore_dtype=self.dtype)
         assert isinstance(model, PeftModelForCausalLM)
         assert model.base_model.lm_head.weight.dtype == self.dtype
 
         adapter_name = "default"
         is_trainable = False
         # This should work
-        _ = AutoPeftModelForCausalLM.from_pretrained(
-            model_id, adapter_name, is_trainable, mindspore_dtype=self.dtype, **load_kwargs
-        )
+        _ = AutoPeftModelForCausalLM.from_pretrained(model_id, adapter_name, is_trainable, mindspore_dtype=self.dtype)
 
     def test_peft_causal_lm_extended_vocab(self):
         model_id = "peft-internal-testing/tiny-random-OPTForCausalLM-extended-vocab"

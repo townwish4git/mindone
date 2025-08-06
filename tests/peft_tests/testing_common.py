@@ -300,9 +300,7 @@ class PeftCommonTester:
 
                 # check if tensors equal
                 for key in state_dict.keys():
-                    assert mint.allclose(
-                        state_dict[key], state_dict_from_pretrained[key]
-                    )
+                    assert mint.allclose(state_dict[key], state_dict_from_pretrained[key])
 
                 target_adapter_filename = "adapter_model.safetensors" if safe_serialization else "adapter_model.ckpt"
 
@@ -362,9 +360,7 @@ class PeftCommonTester:
 
                 # check if tensors equal
                 for key in state_dict.keys():
-                    assert mint.allclose(
-                        state_dict[key], state_dict_from_pretrained[key]
-                    )
+                    assert mint.allclose(state_dict[key], state_dict_from_pretrained[key])
 
                 target_adapter_filename = "adapter_model.safetensors" if safe_serialization else "adapter_model.ckpt"
 
@@ -1091,7 +1087,7 @@ class PeftCommonTester:
             model = get_peft_model(model, config)
             model.add_adapter(adapter_to_delete, config)
             # "delete_me" is added but not activated
-                        model.delete_adapter(adapter_to_delete)
+            model.delete_adapter(adapter_to_delete)
             assert adapter_to_delete not in model.peft_config
             assert model.active_adapters == ["default"]
 
