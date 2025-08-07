@@ -53,7 +53,7 @@ class TestPeftAutoModel:
         _ = AutoPeftModelForCausalLM.from_pretrained(model_id, adapter_name, is_trainable, mindspore_dtype=self.dtype)
 
     def test_peft_causal_lm_extended_vocab(self):
-        model_id = "peft-internal-testing/tiny-random-OPTForCausalLM-extended-vocab"
+        model_id = "townwish/tiny-random-OPTForCausalLM-extended-vocab"
         model = AutoPeftModelForCausalLM.from_pretrained(model_id)
         assert isinstance(model, PeftModelForCausalLM)
 

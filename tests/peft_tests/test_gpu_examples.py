@@ -4013,8 +4013,8 @@ class TestLowCpuMemUsageDifferentDevices:
         load_result = set_peft_model_state_dict(model, peft_model_state_dict, low_cpu_mem_usage=True)
 
         # sanity check: all lora keys are matched
-        assert not any("lora" in k for k in load_result.missing_keys)
-        assert not any("lora" in k for k in load_result.unexpected_keys)
+        assert not any("lora" in k for k in load_result["missing_keys"])
+        assert not any("lora" in k for k in load_result["unexpected_keys"])
 
         logits_low_cpu_mem = model(**inputs).logits
 
