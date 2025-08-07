@@ -516,7 +516,9 @@ class PeftModel(PushToHubMixin, nn.Cell):
         r"""
         Prepares the model for gradient checkpointing if necessary
         """
-        raise NotImplementedError
+        # Since MindSpore and PyTorch have different machanisms for autograd, we don't have to do `enable_input_require_grads`
+        # or `make_inputs_require_grad` as PyTorch does. Instead, we can just return the model as is.
+        return model
 
     def get_prompt_embedding_to_save(self, adapter_name: str) -> ms.Tensor:
         """
