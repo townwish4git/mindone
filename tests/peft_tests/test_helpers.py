@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 import pytest
-import torch
-from diffusers import StableDiffusionPipeline
-from peft import LoraConfig, get_peft_model
-from peft.helpers import check_if_peft_model, disable_input_dtype_casting, rescale_adapter_scale
-from peft.tuners.lora.layer import LoraLayer
-from peft.utils import infer_device
-from torch import nn
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoTokenizer
+
+import mindspore as ms
+from mindspore import mint, nn
+
+from mindone.diffusers import StableDiffusionPipeline
+from mindone.peft import LoraConfig, get_peft_model
+from mindone.peft.helpers import check_if_peft_model, disable_input_dtype_casting, rescale_adapter_scale
+from mindone.peft.tuners.lora.layer import LoraLayer
+from mindone.transformers import AutoModelForCausalLM
 
 
 class TestCheckIsPeftModel:
@@ -80,7 +81,7 @@ class TestScalingAdapters:
 
     def get_scale_from_modules(self, model):
         layer_to_scale_map = {}
-        for name, module in model.named_modules():
+        for name, module in model.cells_and_names():
             if isinstance(module, LoraLayer):
                 layer_to_scale_map[name] = module.scaling
 
@@ -98,11 +99,11 @@ class TestScalingAdapters:
         )
 
         model = get_peft_model(model, lora_config)
-        model.eval()
-        inputs = tokenizer("hello world", return_tensors="pt")
+        model.set_train(False)
+        inputs = ms.Tensor.from_numpy(tokenizer("hello world", return_tensors="np"))
 
-        with torch.no_grad():
-            logits_before_scaling = model(**inputs).logits
+        with ms._no_grad():
+            logits_before_scaling = model(**inputs, return_dict=True).logits
 
         scales_before_scaling = self.get_scale_from_modules(model)
 
@@ -111,19 +112,19 @@ class TestScalingAdapters:
             for key in scales_before_scaling.keys():
                 assert scales_before_scaling[key] != scales_during_scaling[key]
 
-            with torch.no_grad():
-                logits_during_scaling = model(**inputs).logits
+            with ms._no_grad():
+                logits_during_scaling = model(**inputs, return_dict=True).logits
 
-            assert not torch.allclose(logits_before_scaling, logits_during_scaling)
+            assert not mint.allclose(logits_before_scaling, logits_during_scaling)
 
         scales_after_scaling = self.get_scale_from_modules(model)
         for key in scales_before_scaling.keys():
             assert scales_before_scaling[key] == scales_after_scaling[key]
 
-        with torch.no_grad():
-            logits_after_scaling = model(**inputs).logits
+        with ms._no_grad():
+            logits_after_scaling = model(**inputs, return_dict=True).logits
 
-        assert torch.allclose(logits_before_scaling, logits_after_scaling)
+        assert mint.allclose(logits_before_scaling, logits_after_scaling)
 
     def test_wrong_scaling_datatype(self):
         model = AutoModelForCausalLM.from_pretrained("facebook/opt-125m")
@@ -155,12 +156,12 @@ class TestScalingAdapters:
 
     def test_scaling_set_to_zero(self, tokenizer):
         base_model = AutoModelForCausalLM.from_pretrained("facebook/opt-125m")
-        inputs = tokenizer("hello world", return_tensors="pt")
+        inputs = ms.Tensor.from_numpy(tokenizer("hello world", return_tensors="np"))
 
-        base_model.eval()
+        base_model.set_train(False)
 
-        with torch.no_grad():
-            logits_base_model = base_model(**inputs).logits
+        with ms._no_grad():
+            logits_base_model = base_model(**inputs, return_dict=True).logits
 
         lora_config = LoraConfig(
             r=4,
@@ -171,13 +172,13 @@ class TestScalingAdapters:
             init_lora_weights=False,
         )
         lora_model = get_peft_model(base_model, lora_config)
-        lora_model.eval()
+        lora_model.set_train(False)
 
         with rescale_adapter_scale(model=lora_model, multiplier=0.0):
-            with torch.no_grad():
-                logits_lora_model = lora_model(**inputs).logits
+            with ms._no_grad():
+                logits_lora_model = lora_model(**inputs, return_dict=True).logits
 
-        assert torch.allclose(logits_base_model, logits_lora_model)
+        assert mint.allclose(logits_base_model, logits_lora_model)
 
     def test_diffusers_pipeline(self):
         model_id = "hf-internal-testing/tiny-sd-pipe"
@@ -239,30 +240,30 @@ class TestScalingAdapters:
         model = AutoModelForCausalLM.from_pretrained(model_id)
         model.load_adapter(tmp_path / "opt-lora")
 
-        inputs = tokenizer("hello world", return_tensors="pt")
+        inputs = ms.Tensor.from_numpy(tokenizer("hello world", return_tensors="np"))
 
-        model = model.eval()
+        model = model.set_train(False)
 
-        with torch.no_grad():
-            logits_before_scaling = model(**inputs).logits
+        with ms._no_grad():
+            logits_before_scaling = model(**inputs, return_dict=True).logits
         scales_before_scaling = self.get_scale_from_modules(model)
 
         with rescale_adapter_scale(model=model, multiplier=0.5):
             scales_during_scaling = self.get_scale_from_modules(model)
             for key in scales_before_scaling.keys():
                 assert scales_before_scaling[key] != scales_during_scaling[key]
-            with torch.no_grad():
-                logits_during_scaling = model(**inputs).logits
-            assert not torch.allclose(logits_before_scaling, logits_during_scaling)
+            with ms._no_grad():
+                logits_during_scaling = model(**inputs, return_dict=True).logits
+            assert not mint.allclose(logits_before_scaling, logits_during_scaling)
         scales_after_scaling = self.get_scale_from_modules(model)
 
         for key in scales_before_scaling.keys():
             assert scales_before_scaling[key] == scales_after_scaling[key]
 
-        with torch.no_grad():
-            logits_after_scaling = model(**inputs).logits
+        with ms._no_grad():
+            logits_after_scaling = model(**inputs, return_dict=True).logits
 
-        assert torch.allclose(logits_before_scaling, logits_after_scaling)
+        assert mint.allclose(logits_before_scaling, logits_after_scaling)
 
     def test_multi_adapters(self, tokenizer):
         model = AutoModelForCausalLM.from_pretrained("facebook/opt-125m")
@@ -275,35 +276,35 @@ class TestScalingAdapters:
             init_lora_weights=False,
         )
         model = get_peft_model(model, lora_config)
-        inputs = tokenizer("hello world", return_tensors="pt")
+        inputs = ms.Tensor.from_numpy(tokenizer("hello world", return_tensors="np"))
 
         # add another adaper and activate it
         model.add_adapter("other", lora_config)
         model.set_adapter("other")
 
         scales_before_scaling = self.get_scale_from_modules(model)
-        model.eval()
-        with torch.no_grad():
-            logits_before = model(**inputs).logits
+        model.set_train(False)
+        with ms._no_grad():
+            logits_before = model(**inputs, return_dict=True).logits
 
         with rescale_adapter_scale(model=model, multiplier=0.5):
             scales_during_scaling = self.get_scale_from_modules(model)
             for key in scales_before_scaling.keys():
                 assert scales_before_scaling[key] != scales_during_scaling[key]
 
-            with torch.no_grad():
-                logits_during = model(**inputs).logits
+            with ms._no_grad():
+                logits_during = model(**inputs, return_dict=True).logits
 
-            assert not torch.allclose(logits_before, logits_during)
+            assert not mint.allclose(logits_before, logits_during)
 
         scales_after_scaling = self.get_scale_from_modules(model)
         for key in scales_before_scaling.keys():
             assert scales_before_scaling[key] == scales_after_scaling[key]
 
-        with torch.no_grad():
-            logits_after = model(**inputs).logits
+        with ms._no_grad():
+            logits_after = model(**inputs, return_dict=True).logits
 
-        assert torch.allclose(logits_before, logits_after)
+        assert mint.allclose(logits_before, logits_after)
 
     def test_rank_alpha_pattern(self, tokenizer):
         model = AutoModelForCausalLM.from_pretrained("facebook/opt-125m")
@@ -319,11 +320,11 @@ class TestScalingAdapters:
         )
 
         model = get_peft_model(model, lora_config)
-        model.eval()
-        inputs = tokenizer("hello world", return_tensors="pt")
+        model.set_train(False)
+        inputs = ms.Tensor.from_numpy(tokenizer("hello world", return_tensors="np"))
 
-        with torch.no_grad():
-            logits_before_scaling = model(**inputs).logits
+        with ms._no_grad():
+            logits_before_scaling = model(**inputs, return_dict=True).logits
 
         scales_before_scaling = self.get_scale_from_modules(model)
 
@@ -332,19 +333,19 @@ class TestScalingAdapters:
             for key in scales_before_scaling.keys():
                 assert scales_before_scaling[key] != scales_during_scaling[key]
 
-            with torch.no_grad():
-                logits_during_scaling = model(**inputs).logits
+            with ms._no_grad():
+                logits_during_scaling = model(**inputs, return_dict=True).logits
 
-            assert not torch.allclose(logits_before_scaling, logits_during_scaling)
+            assert not mint.allclose(logits_before_scaling, logits_during_scaling)
 
         scales_after_scaling = self.get_scale_from_modules(model)
         for key in scales_before_scaling.keys():
             assert scales_before_scaling[key] == scales_after_scaling[key]
 
-        with torch.no_grad():
-            logits_after_scaling = model(**inputs).logits
+        with ms._no_grad():
+            logits_after_scaling = model(**inputs, return_dict=True).logits
 
-        assert torch.allclose(logits_before_scaling, logits_after_scaling)
+        assert mint.allclose(logits_before_scaling, logits_after_scaling)
 
     def test_merging_adapter(self, tokenizer):
         model = AutoModelForCausalLM.from_pretrained("facebook/opt-125m")
@@ -358,18 +359,18 @@ class TestScalingAdapters:
         )
 
         model = get_peft_model(model, lora_config)
-        model.eval()
-        inputs = tokenizer("hello world", return_tensors="pt")
+        model.set_train(False)
+        inputs = ms.Tensor.from_numpy(tokenizer("hello world", return_tensors="np"))
 
         with rescale_adapter_scale(model=model, multiplier=0.5):
-            with torch.no_grad():
-                logits_unmerged_scaling = model(**inputs).logits
+            with ms._no_grad():
+                logits_unmerged_scaling = model(**inputs, return_dict=True).logits
             model = model.merge_and_unload()
 
-        with torch.no_grad():
-            logits_merged_scaling = model(**inputs).logits
+        with ms._no_grad():
+            logits_merged_scaling = model(**inputs, return_dict=True).logits
 
-        assert torch.allclose(logits_merged_scaling, logits_unmerged_scaling, atol=1e-4, rtol=1e-4)
+        assert mint.allclose(logits_merged_scaling, logits_unmerged_scaling, atol=1e-4, rtol=1e-4)
 
 
 class TestDisableInputDtypeCasting:
@@ -391,19 +392,16 @@ class TestDisableInputDtypeCasting:
 
     """
 
-    device = infer_device()
     dtype_record = []
 
-    @torch.no_grad()
     def cast_params_to_fp32_pre_hook(self, module, input):
-        for param in module.parameters(recurse=False):
-            param.data = param.data.float()
+        for param in module.get_parameters(recurse=False):
+            param.data.set_dtype(ms.float32)
         return input
 
-    @torch.no_grad()
     def cast_params_to_fp16_hook(self, module, input, output):
-        for param in module.parameters(recurse=False):
-            param.data = param.data.half()
+        for param in module.get_parameters(recurse=False):
+            param.data.set_dtype(ms.float16)
         return output
 
     def record_dtype_hook(self, module, input, output):
@@ -411,18 +409,18 @@ class TestDisableInputDtypeCasting:
 
     @pytest.fixture
     def inputs(self):
-        return torch.randn(4, 10, device=self.device, dtype=torch.float32)
+        return mint.randn(4, 10, dtype=ms.float32)
 
     @pytest.fixture
     def base_model(self):
-        class MLP(nn.Module):
+        class MLP(nn.Cell):
             def __init__(self, bias=True):
                 super().__init__()
-                self.lin0 = nn.Linear(10, 20, bias=bias)
-                self.lin1 = nn.Linear(20, 2, bias=bias)
-                self.sm = nn.LogSoftmax(dim=-1)
+                self.lin0 = mint.nn.Linear(10, 20, bias=bias)
+                self.lin1 = mint.nn.Linear(20, 2, bias=bias)
+                self.sm = mint.nn.LogSoftmax(dim=-1)
 
-            def forward(self, X):
+            def construct(self, X):
                 X = self.lin0(X)
                 X = self.lin1(X)
                 X = self.sm(X)
@@ -433,10 +431,10 @@ class TestDisableInputDtypeCasting:
     @pytest.fixture
     def model(self, base_model):
         config = LoraConfig(target_modules=["lin0"], modules_to_save=["lin1"])
-        model = get_peft_model(base_model, config).to(device=self.device, dtype=torch.float16)
+        model = get_peft_model(base_model, config).to(dtype=ms.float16)
         # Register hooks on the submodule that holds parameters
-        for module in model.modules():
-            if sum(p.numel() for p in module.parameters()) > 0:
+        for _, module in model.cells_and_names():
+            if sum(p.numel() for p in module.get_parameters()) > 0:
                 module.register_forward_pre_hook(self.cast_params_to_fp32_pre_hook)
                 module.register_forward_hook(self.cast_params_to_fp16_hook)
             if isinstance(module, LoraLayer):
@@ -447,7 +445,7 @@ class TestDisableInputDtypeCasting:
         self.dtype_record.clear()
         with disable_input_dtype_casting(model, active=True):
             model(inputs)
-        assert self.dtype_record == [torch.float32]
+        assert self.dtype_record == [ms.float32]
 
     def test_no_disable_input_dtype_casting(self, model, inputs):
         msg = r"expected m.*1 and m.*2 to have the same dtype"

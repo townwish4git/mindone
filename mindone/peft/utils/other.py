@@ -587,8 +587,6 @@ def _set_adapter(model, adapter_name):
         adapter_name = adapter_name[0]
         return adapter_name
 
-    model: nn.Cell
-    model.cells_and_names
     for _, module in model.cells_and_names():
         if isinstance(module, AuxiliaryTrainingWrapper):
             # only check the adapter_name if we actually encounter a AuxiliaryTrainingWrapper, otherwise we don't care

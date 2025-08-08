@@ -60,14 +60,14 @@ class PeftGPUCommonTests(unittest.TestCase):
             task_type="CAUSAL_LM",
         )
 
-        model = AutoModelForCausalLM.from_pretrained(self.causal_lm_model_id, device_map="balanced")
+        model = AutoModelForCausalLM.from_pretrained(self.causal_lm_model_id, revision="refs/pr/40")
         tokenizer = AutoTokenizer.from_pretrained(self.seq2seq_model_id)
 
         model = get_peft_model(model, lora_config)
         assert isinstance(model, PeftModel)
 
         dummy_input = "This is a dummy input:"
-        input_ids = ms.Tensor.from_numpy(tokenizer(dummy_input, return_tensors="pt").input_ids)
+        input_ids = ms.Tensor.from_numpy(tokenizer(dummy_input, return_tensors="np").input_ids)
 
         # this should work without any problem
         _ = model.generate(input_ids=input_ids)
