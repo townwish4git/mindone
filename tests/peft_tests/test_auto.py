@@ -68,7 +68,7 @@ class TestPeftAutoModel:
         _ = AutoPeftModelForCausalLM.from_pretrained(model_id, adapter_name, is_trainable, mindspore_dtype=self.dtype)
 
     def test_peft_whisper(self):
-        model_id = "peft-internal-testing/tiny_WhisperForConditionalGeneration-lora"
+        model_id = "townwish/tiny_WhisperForConditionalGeneration-lora"
         model = AutoPeftModel.from_pretrained(model_id)
         assert isinstance(model, PeftModel)
 
@@ -81,7 +81,7 @@ class TestPeftAutoModel:
         # check if kwargs are passed correctly
         model = AutoPeftModel.from_pretrained(model_id, mindspore_dtype=self.dtype)
         assert isinstance(model, PeftModel)
-        assert model.base_model.model.model.encoder.embed_positions.weight.dtype == self.dtype
+        assert model.base_model.model.model.encoder.embed_positions.embedding_table.dtype == self.dtype
 
         adapter_name = "default"
         is_trainable = False

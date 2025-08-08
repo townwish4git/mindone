@@ -71,7 +71,7 @@ class TestPeftConfig:
         """
         from mindone.peft.mapping import PEFT_TYPE_TO_CONFIG_MAPPING
 
-        for peft_type in PeftType:
+        for peft_type in (PeftType.LORA,):  # only LoRA is supported for now.
             expected_cls = PEFT_TYPE_TO_CONFIG_MAPPING[peft_type]
             mandatory_config_kwargs = {}
 

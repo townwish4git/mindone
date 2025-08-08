@@ -547,7 +547,9 @@ def _set_trainable(
     trainable_modules = []
     found_modules = set()
     # disable removal of duplicates to support targeting tied weights
-    key_list = [key for key, _ in model.cells_and_names(remove_duplicate=False)]
+    # FIXME: model.cells_and_names() remove duplicates as `remove_duplicate=False` is not supported in MindSpore,
+    #        this might cause issues if there are tied weights.
+    key_list = [key for key, _ in model.cells_and_names()]
 
     for key in key_list:
         target_module_found = any(key.endswith(target_key) for target_key in module_names)
@@ -585,6 +587,8 @@ def _set_adapter(model, adapter_name):
         adapter_name = adapter_name[0]
         return adapter_name
 
+    model: nn.Cell
+    model.cells_and_names
     for _, module in model.cells_and_names():
         if isinstance(module, AuxiliaryTrainingWrapper):
             # only check the adapter_name if we actually encounter a AuxiliaryTrainingWrapper, otherwise we don't care
