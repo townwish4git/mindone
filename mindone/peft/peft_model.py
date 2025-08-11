@@ -1065,6 +1065,24 @@ class PeftModel(PushToHubMixin, nn.Cell):
         card.text = "\n".join(lines)
         card.save(filename)
 
+    # Copied from mindone.diffusers.models.modeling_utils.ModelMixin.to
+    def to(self, dtype: Optional[ms.Type] = None):
+        for p in self.get_parameters():
+            p.set_dtype(dtype)
+        return self
+
+    # Copied from mindone.diffusers.models.modeling_utils.ModelMixin.half
+    def half(self):
+        for p in self.get_parameters():
+            p.set_dtype(ms.float16)
+        return self
+
+    # Copied from mindone.diffusers.models.modeling_utils.ModelMixin.float
+    def float(self):
+        for p in self.get_parameters():
+            p.set_dtype(ms.float32)
+        return self
+
 
 class PeftModelForCausalLM(PeftModel):
     """
