@@ -395,12 +395,12 @@ class TestDisableInputDtypeCasting:
     dtype_record = []
 
     def cast_params_to_fp32_pre_hook(self, module, input):
-        for param in module.get_parameters(recurse=False):
+        for param in module.get_parameters(expand=False):
             param.data.set_dtype(ms.float32)
         return input
 
     def cast_params_to_fp16_hook(self, module, input, output):
-        for param in module.get_parameters(recurse=False):
+        for param in module.get_parameters(expand=False):
             param.data.set_dtype(ms.float16)
         return output
 
@@ -448,12 +448,12 @@ class TestDisableInputDtypeCasting:
         assert self.dtype_record == [ms.float32]
 
     def test_no_disable_input_dtype_casting(self, model, inputs):
-        msg = r"expected m.*1 and m.*2 to have the same dtype"
+        msg = r"the type of m.*1 should be same as m.*2"
         with pytest.raises(RuntimeError, match=msg):
             model(inputs)
 
     def test_disable_input_dtype_casting_inactive(self, model, inputs):
-        msg = r"expected m.*1 and m.*2 to have the same dtype"
+        msg = r"the type of m.*1 should be same as m.*2"
         with pytest.raises(RuntimeError, match=msg):
             with disable_input_dtype_casting(model, active=False):
                 model(inputs)
@@ -464,6 +464,6 @@ class TestDisableInputDtypeCasting:
             model(inputs)
 
         # after the context exited, we're back to the error
-        msg = r"expected m.*1 and m.*2 to have the same dtype"
+        msg = r"the type of m.*1 should be same as m.*2"
         with pytest.raises(RuntimeError, match=msg):
             model(inputs)
