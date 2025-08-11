@@ -393,6 +393,23 @@ class TestDisableInputDtypeCasting:
     """
 
     dtype_record = []
+    pynative_sync_orig = None
+
+    @classmethod
+    def setup_class(cls):
+        # Since the MindSpore framework asynchronously offloads host operators and executes device operators by default,
+        # the cast operation for input dtype is inherently risky. We have set pynative_synchronize=True to ensure the
+        # execution order of casting and actual computations meets expectations.​
+        #
+        # TODO: `ms.set_context(pynative_synchronize=True)` will be deprecated and removed in future versions.
+        #       Use the api `ms.runtime.launch_blocking()` instead.
+
+        cls.pynative_sync_orig = ms.get_context("pynative_synchronize")
+        ms.set_context(pynative_synchronize=True)
+
+    @classmethod
+    def teardown_class(cls):
+        ms.set_context(pynative_synchronize=cls.pynative_sync_orig)
 
     def cast_params_to_fp32_pre_hook(self, module, input):
         for param in module.get_parameters(expand=False):
@@ -448,13 +465,13 @@ class TestDisableInputDtypeCasting:
         assert self.dtype_record == [ms.float32]
 
     def test_no_disable_input_dtype_casting(self, model, inputs):
-        msg = r"the type of m.*1 should be same as m.*2"
-        with pytest.raises(RuntimeError, match=msg):
+        msg = r"the type of '.*' should be same as '.*'"
+        with pytest.raises(TypeError, match=msg):
             model(inputs)
 
     def test_disable_input_dtype_casting_inactive(self, model, inputs):
-        msg = r"the type of m.*1 should be same as m.*2"
-        with pytest.raises(RuntimeError, match=msg):
+        msg = r"the type of '.*' should be same as '.*'"
+        with pytest.raises(TypeError, match=msg):
             with disable_input_dtype_casting(model, active=False):
                 model(inputs)
 
@@ -464,6 +481,6 @@ class TestDisableInputDtypeCasting:
             model(inputs)
 
         # after the context exited, we're back to the error
-        msg = r"the type of m.*1 should be same as m.*2"
-        with pytest.raises(RuntimeError, match=msg):
+        msg = r"the type of '.*' should be same as '.*'"
+        with pytest.raises(TypeError, match=msg):
             model(inputs)
