@@ -103,8 +103,8 @@ class TestScalingAdapters:
         model = get_peft_model(model, lora_config)
         model.set_train(False)
         inputs = {
-            ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
-            for v in tokenizer("hello world", return_tensors="np").values()
+            k: ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
+            for k, v in tokenizer("hello world", return_tensors="np").items()
         }
 
         with ms._no_grad():
@@ -162,8 +162,8 @@ class TestScalingAdapters:
     def test_scaling_set_to_zero(self, tokenizer):
         base_model = AutoModelForCausalLM.from_pretrained("facebook/opt-125m", revision="refs/pr/48")
         inputs = {
-            ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
-            for v in tokenizer("hello world", return_tensors="np").values()
+            k: ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
+            for k, v in tokenizer("hello world", return_tensors="np").items()
         }
 
         base_model.set_train(False)
@@ -249,8 +249,8 @@ class TestScalingAdapters:
         model.load_adapter(tmp_path / "opt-lora")
 
         inputs = {
-            ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
-            for v in tokenizer("hello world", return_tensors="np").values()
+            k: ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
+            for k, v in tokenizer("hello world", return_tensors="np").items()
         }
 
         model = model.set_train(False)
@@ -288,8 +288,8 @@ class TestScalingAdapters:
         )
         model = get_peft_model(model, lora_config)
         inputs = {
-            ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
-            for v in tokenizer("hello world", return_tensors="np").values()
+            k: ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
+            for k, v in tokenizer("hello world", return_tensors="np").items()
         }
 
         # add another adaper and activate it
@@ -336,8 +336,8 @@ class TestScalingAdapters:
         model = get_peft_model(model, lora_config)
         model.set_train(False)
         inputs = {
-            ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
-            for v in tokenizer("hello world", return_tensors="np").values()
+            k: ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
+            for k, v in tokenizer("hello world", return_tensors="np").items()
         }
 
         with ms._no_grad():
@@ -378,8 +378,8 @@ class TestScalingAdapters:
         model = get_peft_model(model, lora_config)
         model.set_train(False)
         inputs = {
-            ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
-            for v in tokenizer("hello world", return_tensors="np").values()
+            k: ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
+            for k, v in tokenizer("hello world", return_tensors="np").items()
         }
 
         with rescale_adapter_scale(model=model, multiplier=0.5):
