@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import pytest
 from transformers import AutoTokenizer
 
 import mindspore as ms
 from mindspore import mint, nn
+from mindspore.common.api import _pynative_executor
 
 from mindone.diffusers import StableDiffusionPipeline
 from mindone.peft import LoraConfig, get_peft_model
@@ -100,7 +102,10 @@ class TestScalingAdapters:
 
         model = get_peft_model(model, lora_config)
         model.set_train(False)
-        inputs = ms.Tensor.from_numpy(tokenizer("hello world", return_tensors="np"))
+        inputs = {
+            ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
+            for v in tokenizer("hello world", return_tensors="np").values()
+        }
 
         with ms._no_grad():
             logits_before_scaling = model(**inputs, return_dict=True).logits
@@ -156,7 +161,10 @@ class TestScalingAdapters:
 
     def test_scaling_set_to_zero(self, tokenizer):
         base_model = AutoModelForCausalLM.from_pretrained("facebook/opt-125m", revision="refs/pr/48")
-        inputs = ms.Tensor.from_numpy(tokenizer("hello world", return_tensors="np"))
+        inputs = {
+            ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
+            for v in tokenizer("hello world", return_tensors="np").values()
+        }
 
         base_model.set_train(False)
 
@@ -240,7 +248,10 @@ class TestScalingAdapters:
         model = AutoModelForCausalLM.from_pretrained(model_id, revision="refs/pr/48")
         model.load_adapter(tmp_path / "opt-lora")
 
-        inputs = ms.Tensor.from_numpy(tokenizer("hello world", return_tensors="np"))
+        inputs = {
+            ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
+            for v in tokenizer("hello world", return_tensors="np").values()
+        }
 
         model = model.set_train(False)
 
@@ -276,7 +287,10 @@ class TestScalingAdapters:
             init_lora_weights=False,
         )
         model = get_peft_model(model, lora_config)
-        inputs = ms.Tensor.from_numpy(tokenizer("hello world", return_tensors="np"))
+        inputs = {
+            ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
+            for v in tokenizer("hello world", return_tensors="np").values()
+        }
 
         # add another adaper and activate it
         model.add_adapter("other", lora_config)
@@ -321,7 +335,10 @@ class TestScalingAdapters:
 
         model = get_peft_model(model, lora_config)
         model.set_train(False)
-        inputs = ms.Tensor.from_numpy(tokenizer("hello world", return_tensors="np"))
+        inputs = {
+            ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
+            for v in tokenizer("hello world", return_tensors="np").values()
+        }
 
         with ms._no_grad():
             logits_before_scaling = model(**inputs, return_dict=True).logits
@@ -360,7 +377,10 @@ class TestScalingAdapters:
 
         model = get_peft_model(model, lora_config)
         model.set_train(False)
-        inputs = ms.Tensor.from_numpy(tokenizer("hello world", return_tensors="np"))
+        inputs = {
+            ms.Tensor.from_numpy(v) if isinstance(v, np.ndarray) else v
+            for v in tokenizer("hello world", return_tensors="np").values()
+        }
 
         with rescale_adapter_scale(model=model, multiplier=0.5):
             with ms._no_grad():
@@ -414,11 +434,13 @@ class TestDisableInputDtypeCasting:
     def cast_params_to_fp32_pre_hook(self, module, input):
         for param in module.get_parameters(expand=False):
             param.data.set_dtype(ms.float32)
+        _pynative_executor.sync()
         return input
 
     def cast_params_to_fp16_hook(self, module, input, output):
         for param in module.get_parameters(expand=False):
             param.data.set_dtype(ms.float16)
+        _pynative_executor.sync()
         return output
 
     def record_dtype_hook(self, module, input, output):
