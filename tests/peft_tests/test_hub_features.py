@@ -14,11 +14,12 @@
 import copy
 import unittest
 
-import torch
-from peft import AutoPeftModelForCausalLM, LoraConfig, PeftConfig, PeftModel, get_peft_model
-from transformers import AutoModelForCausalLM
+from mindspore import mint
 
-PEFT_MODELS_TO_TEST = [("peft-internal-testing/test-lora-subfolder", "test")]
+from mindone.peft import AutoPeftModelForCausalLM, LoraConfig, PeftConfig, PeftModel, get_peft_model
+from mindone.transformers import AutoModelForCausalLM
+
+PEFT_MODELS_TO_TEST = [("townwish/test-lora-subfolder", "test")]
 
 
 class PeftHubFeaturesTester(unittest.TestCase):
@@ -45,7 +46,7 @@ class TestLocalModel:
         # This test makes sure that the local `config.json` is checked as well.
         # If `save_pretrained` could not find the file, it will issue a warning.
         model_id = "facebook/opt-125m"
-        model = AutoModelForCausalLM.from_pretrained(model_id)
+        model = AutoModelForCausalLM.from_pretrained(model_id, revision="refs/pr/48")
         local_dir = tmp_path / model_id
         model.save_pretrained(local_dir)
         del model
@@ -66,7 +67,7 @@ class TestBaseModelRevision:
         model
         """
         lora_config = LoraConfig(r=8, lora_alpha=16, lora_dropout=0.0)
-        test_inputs = torch.arange(10).reshape(-1, 1)
+        test_inputs = mint.arange(10).reshape(-1, 1)
 
         base_model_id = "peft-internal-testing/tiny-random-BertModel"
         revision = "v2.0.0"
@@ -82,7 +83,7 @@ class TestBaseModelRevision:
         lora_config_no_revision.revision = "main"
         peft_model_no_revision = get_peft_model(base_model_no_revision, lora_config_no_revision, revision="main")
         output_no_revision = peft_model_no_revision(test_inputs).logits
-        assert not torch.allclose(output_no_revision, output_revision)
+        assert not mint.allclose(output_no_revision, output_revision)
 
         # check that if we save and load the model, the output corresponds to the one with revision
         peft_model_revision.save_pretrained(tmp_path / "peft_model_revision")
@@ -91,7 +92,7 @@ class TestBaseModelRevision:
         assert peft_model_revision_loaded.peft_config["default"].revision == revision
 
         output_revision_loaded = peft_model_revision_loaded(test_inputs).logits
-        assert torch.allclose(output_revision, output_revision_loaded)
+        assert mint.allclose(output_revision, output_revision_loaded)
 
     def test_load_different_peft_and_base_model_revision(self, tmp_path):
         r"""
