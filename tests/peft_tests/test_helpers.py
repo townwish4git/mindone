@@ -17,14 +17,126 @@ import pytest
 from transformers import AutoTokenizer
 
 import mindspore as ms
-from mindspore import mint, nn
-from mindspore.common.api import _pynative_executor
+from mindspore import mint, nns
 
 from mindone.diffusers import StableDiffusionPipeline
 from mindone.peft import LoraConfig, get_peft_model
 from mindone.peft.helpers import check_if_peft_model, disable_input_dtype_casting, rescale_adapter_scale
 from mindone.peft.tuners.lora.layer import LoraLayer
 from mindone.transformers import AutoModelForCausalLM
+
+
+class TestDisableInputDtypeCasting:
+    """Test the context manager `disable_input_dtype_casting` that temporarily disables input dtype casting
+    in the model.
+
+    The test works as follows:
+
+    We create a simple MLP and convert it to a PeftModel. The model dtype is set to float16. Then a pre-foward hook is
+    added that casts the model parameters to float32. Moreover, a post-forward hook is added that casts the weights
+    back to float16. The input dtype is float32.
+
+    Without the disable_input_dtype_casting context, what would happen is that PEFT detects that the input dtype is
+    float32 but the weight dtype is float16, so it casts the input to float16. Then the pre-forward hook casts the
+    weight to float32, which results in a RuntimeError.
+
+    With the disable_input_dtype_casting context, the input dtype is left as float32 and there is no error. We also add
+    a hook to record the dtype of the result from the LoraLayer to ensure that it is indeed float32.
+
+    """
+
+    dtype_record = []
+    pynative_sync_orig = None
+
+    @classmethod
+    def setup_class(cls):
+        # Since the MindSpore framework asynchronously offloads host operators and executes device operators by default,
+        # the cast operation for input dtype is inherently risky. We have set pynative_synchronize=True to ensure the
+        # execution order of casting and actual computations meets expectations.​
+        #
+        # TODO: `ms.set_context(pynative_synchronize=True)` will be deprecated and removed in future versions.
+        #       Use the api `ms.runtime.launch_blocking()` instead.
+
+        cls.pynative_sync_orig = ms.get_context("pynative_synchronize")
+        ms.set_context(pynative_synchronize=True)
+
+    @classmethod
+    def teardown_class(cls):
+        ms.set_context(pynative_synchronize=cls.pynative_sync_orig)
+
+    def cast_params_to_fp32_pre_hook(self, module, input):
+        for param in module.get_parameters(expand=False):
+            param.data.set_dtype(ms.float32)
+        return input
+
+    def cast_params_to_fp16_hook(self, module, input, output):
+        for param in module.get_parameters(expand=False):
+            param.data.set_dtype(ms.float16)
+        return output
+
+    def record_dtype_hook(self, module, input, output):
+        self.dtype_record.append(output[0].dtype)
+
+    @pytest.fixture
+    def inputs(self):
+        return mint.randn(4, 10, dtype=ms.float32)
+
+    @pytest.fixture
+    def base_model(self):
+        class MLP(nn.Cell):
+            def __init__(self, bias=True):
+                super().__init__()
+                self.lin0 = mint.nn.Linear(10, 20, bias=bias)
+                self.lin1 = mint.nn.Linear(20, 2, bias=bias)
+                self.sm = mint.nn.LogSoftmax(dim=-1)
+
+            def construct(self, X):
+                X = self.lin0(X)
+                X = self.lin1(X)
+                X = self.sm(X)
+                return X
+
+        return MLP()
+
+    @pytest.fixture
+    def model(self, base_model):
+        config = LoraConfig(target_modules=["lin0"], modules_to_save=["lin1"])
+        model = get_peft_model(base_model, config).to(dtype=ms.float16)
+        # Register hooks on the submodule that holds parameters
+        for _, module in model.cells_and_names():
+            if sum(p.numel() for p in module.get_parameters()) > 0:
+                module.register_forward_pre_hook(self.cast_params_to_fp32_pre_hook)
+                module.register_forward_hook(self.cast_params_to_fp16_hook)
+            if isinstance(module, LoraLayer):
+                module.register_forward_hook(self.record_dtype_hook)
+        return model
+
+    def test_disable_input_dtype_casting_active(self, model, inputs):
+        self.dtype_record.clear()
+        with disable_input_dtype_casting(model, active=True):
+            model(inputs)
+        assert self.dtype_record == [ms.float32]
+
+    def test_no_disable_input_dtype_casting(self, model, inputs):
+        msg = r"the type of '.*' should be same as '.*'"
+        with pytest.raises(TypeError, match=msg):
+            model(inputs)
+
+    def test_disable_input_dtype_casting_inactive(self, model, inputs):
+        msg = r"the type of '.*' should be same as '.*'"
+        with pytest.raises(TypeError, match=msg):
+            with disable_input_dtype_casting(model, active=False):
+                model(inputs)
+
+    def test_disable_input_dtype_casting_inactive_after_existing_context(self, model, inputs):
+        # this is to ensure that when the context is left, we return to the previous behavior
+        with disable_input_dtype_casting(model, active=True):
+            model(inputs)
+
+        # after the context exited, we're back to the error
+        msg = r"the type of '.*' should be same as '.*'"
+        with pytest.raises(TypeError, match=msg):
+            model(inputs)
 
 
 class TestCheckIsPeftModel:
@@ -391,118 +503,3 @@ class TestScalingAdapters:
             logits_merged_scaling = model(**inputs, return_dict=True).logits
 
         assert mint.allclose(logits_merged_scaling, logits_unmerged_scaling, atol=1e-4, rtol=1e-4)
-
-
-class TestDisableInputDtypeCasting:
-    """Test the context manager `disable_input_dtype_casting` that temporarily disables input dtype casting
-    in the model.
-
-    The test works as follows:
-
-    We create a simple MLP and convert it to a PeftModel. The model dtype is set to float16. Then a pre-foward hook is
-    added that casts the model parameters to float32. Moreover, a post-forward hook is added that casts the weights
-    back to float16. The input dtype is float32.
-
-    Without the disable_input_dtype_casting context, what would happen is that PEFT detects that the input dtype is
-    float32 but the weight dtype is float16, so it casts the input to float16. Then the pre-forward hook casts the
-    weight to float32, which results in a RuntimeError.
-
-    With the disable_input_dtype_casting context, the input dtype is left as float32 and there is no error. We also add
-    a hook to record the dtype of the result from the LoraLayer to ensure that it is indeed float32.
-
-    """
-
-    dtype_record = []
-    pynative_sync_orig = None
-
-    @classmethod
-    def setup_class(cls):
-        # Since the MindSpore framework asynchronously offloads host operators and executes device operators by default,
-        # the cast operation for input dtype is inherently risky. We have set pynative_synchronize=True to ensure the
-        # execution order of casting and actual computations meets expectations.​
-        #
-        # TODO: `ms.set_context(pynative_synchronize=True)` will be deprecated and removed in future versions.
-        #       Use the api `ms.runtime.launch_blocking()` instead.
-
-        cls.pynative_sync_orig = ms.get_context("pynative_synchronize")
-        ms.set_context(pynative_synchronize=True)
-
-    @classmethod
-    def teardown_class(cls):
-        ms.set_context(pynative_synchronize=cls.pynative_sync_orig)
-
-    def cast_params_to_fp32_pre_hook(self, module, input):
-        for param in module.get_parameters(expand=False):
-            param.data.set_dtype(ms.float32)
-        _pynative_executor.sync()
-        return input
-
-    def cast_params_to_fp16_hook(self, module, input, output):
-        for param in module.get_parameters(expand=False):
-            param.data.set_dtype(ms.float16)
-        _pynative_executor.sync()
-        return output
-
-    def record_dtype_hook(self, module, input, output):
-        self.dtype_record.append(output[0].dtype)
-
-    @pytest.fixture
-    def inputs(self):
-        return mint.randn(4, 10, dtype=ms.float32)
-
-    @pytest.fixture
-    def base_model(self):
-        class MLP(nn.Cell):
-            def __init__(self, bias=True):
-                super().__init__()
-                self.lin0 = mint.nn.Linear(10, 20, bias=bias)
-                self.lin1 = mint.nn.Linear(20, 2, bias=bias)
-                self.sm = mint.nn.LogSoftmax(dim=-1)
-
-            def construct(self, X):
-                X = self.lin0(X)
-                X = self.lin1(X)
-                X = self.sm(X)
-                return X
-
-        return MLP()
-
-    @pytest.fixture
-    def model(self, base_model):
-        config = LoraConfig(target_modules=["lin0"], modules_to_save=["lin1"])
-        model = get_peft_model(base_model, config).to(dtype=ms.float16)
-        # Register hooks on the submodule that holds parameters
-        for _, module in model.cells_and_names():
-            if sum(p.numel() for p in module.get_parameters()) > 0:
-                module.register_forward_pre_hook(self.cast_params_to_fp32_pre_hook)
-                module.register_forward_hook(self.cast_params_to_fp16_hook)
-            if isinstance(module, LoraLayer):
-                module.register_forward_hook(self.record_dtype_hook)
-        return model
-
-    def test_disable_input_dtype_casting_active(self, model, inputs):
-        self.dtype_record.clear()
-        with disable_input_dtype_casting(model, active=True):
-            model(inputs)
-        assert self.dtype_record == [ms.float32]
-
-    def test_no_disable_input_dtype_casting(self, model, inputs):
-        msg = r"the type of '.*' should be same as '.*'"
-        with pytest.raises(TypeError, match=msg):
-            model(inputs)
-
-    def test_disable_input_dtype_casting_inactive(self, model, inputs):
-        msg = r"the type of '.*' should be same as '.*'"
-        with pytest.raises(TypeError, match=msg):
-            with disable_input_dtype_casting(model, active=False):
-                model(inputs)
-
-    def test_disable_input_dtype_casting_inactive_after_existing_context(self, model, inputs):
-        # this is to ensure that when the context is left, we return to the previous behavior
-        with disable_input_dtype_casting(model, active=True):
-            model(inputs)
-
-        # after the context exited, we're back to the error
-        msg = r"the type of '.*' should be same as '.*'"
-        with pytest.raises(TypeError, match=msg):
-            model(inputs)
