@@ -239,7 +239,7 @@ class LoraLayer(BaseTunerLayer):
         weight = transpose(weight.to(ms.float32), self.fan_in_fan_out)
         if init_lora_weights == "pissa":
             # USV^T = W <-> VSU^T = W^T, where W^T = weight.data in R^{out_channel, in_channel},
-            V, S, Uh = mint.linalg.svd(weight, full_matrices=False)
+            S, Uh, V = ops.svd(weight, full_matrices=False)
             Vr = V[:, : self.r[adapter_name]]
             Sr = S[: self.r[adapter_name]]
             Sr /= self.scaling[adapter_name]
