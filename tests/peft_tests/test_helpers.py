@@ -17,7 +17,7 @@ import pytest
 from transformers import AutoTokenizer
 
 import mindspore as ms
-from mindspore import mint, nns
+from mindspore import mint, nn
 
 from mindone.diffusers import StableDiffusionPipeline
 from mindone.peft import LoraConfig, get_peft_model
