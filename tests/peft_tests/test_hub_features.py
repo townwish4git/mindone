@@ -32,6 +32,7 @@ class PeftHubFeaturesTester(unittest.TestCase):
 
             model = AutoModelForCausalLM.from_pretrained(
                 config.base_model_name_or_path,
+                revision=config.revision,
             )
             model = PeftModel.from_pretrained(model, model_id, subfolder=subfolder)
 

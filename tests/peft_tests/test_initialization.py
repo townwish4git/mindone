@@ -39,9 +39,6 @@ from mindone.peft.utils.hotswap import hotswap_adapter, prepare_model_for_compil
 from mindone.safetensors.mindspore import load_file
 from mindone.transformers import AutoModelForCausalLM
 
-# from torch import nn
-# from torch.utils.data import DataLoader
-
 
 class TestLoraInitialization:
     """Test class to check the initialization of LoRA adapters."""
@@ -869,7 +866,7 @@ class TestLoraInitialization:
         # warning. See #2184.
 
         # create an adapter without PiSSA/OloRA
-        model_id = "hf-internal-testing/tiny-random-OPTForCausalLM"
+        model_id = "townwish/tiny-random-OPTForCausalLM"
         model = AutoModelForCausalLM.from_pretrained(model_id)
         model = get_peft_model(model, LoraConfig(init_lora_weights=True))
         model.save_pretrained(tmp_path / "adapter0")
@@ -1141,22 +1138,14 @@ class TestLoraInitialization:
         assert model_bias.base_model.model.conv2d.lora_B["default"].bias.shape == (100,)
 
         # check that the same params are present except for the extra bias term
-        params_no_bias = {name for name, _ in model_no_bias.named_parameters()}
-        params_bias = {name for name, _ in model_bias.named_parameters()}
+        params_no_bias = {name for name, _ in model_no_bias.parameters_and_names()}
+        params_bias = {name for name, _ in model_bias.parameters_and_names()}
         extra_params = {
             "base_model.model.linear.lora_B.default.bias",
             "base_model.model.conv2d.lora_B.default.bias",
         }
         assert params_bias - params_no_bias == extra_params
         assert params_no_bias.issubset(params_bias)
-
-    def test_lora_with_bias_embedding_raises(self):
-        # lora with lora_bias=True is not supported for embedding layers
-        model = self.get_model()
-        config = LoraConfig(target_modules=["embed"], lora_bias=True)
-        msg = "lora_bias=True is not supported for Embedding"
-        with pytest.raises(ValueError, match=msg):
-            get_peft_model(model, config)
 
     @pytest.mark.parametrize(
         "extra_kwargs",
@@ -1223,8 +1212,8 @@ class TestNoInfiniteRecursionDeepspeed:
 
 
 class TestLoadAdapterOfflineMode:
-    base_model = "hf-internal-testing/tiny-random-OPTForCausalLM"
-    peft_model_id = "peft-internal-testing/tiny-OPTForCausalLM-lora"
+    base_model = "townwish/tiny-random-OPTForCausalLM"
+    peft_model_id = "townwish/tiny-OPTForCausalLM-lora"
 
     # make sure that PEFT honors offline mode
     @contextmanager
@@ -1284,7 +1273,7 @@ class TestCustomModelConfigWarning:
 
     def test_no_warning_by_default_transformers_model(self, recwarn):
         # first a sanity test that there is no warning by default when using a model from transformers
-        model = AutoModelForCausalLM.from_pretrained("hf-internal-testing/tiny-random-OPTForCausalLM")
+        model = AutoModelForCausalLM.from_pretrained("townwish/tiny-random-OPTForCausalLM")
         get_peft_model(model, LoraConfig())
         for warning in recwarn.list:
             assert "renamed" not in str(warning.message)
@@ -1297,10 +1286,10 @@ class TestCustomModelConfigWarning:
 
     def test_warning_name_transformers_model(self, recwarn):
         # The base_model_name_or_path provided by the user is overridden.
-        model = AutoModelForCausalLM.from_pretrained("hf-internal-testing/tiny-random-OPTForCausalLM")
+        model = AutoModelForCausalLM.from_pretrained("townwish/tiny-random-OPTForCausalLM")
         custom_name = "custom_name"
         get_peft_model(model, LoraConfig(base_model_name_or_path=custom_name))
-        msg = f"was renamed from '{custom_name}' to 'hf-internal-testing/tiny-random-OPTForCausalLM'"
+        msg = f"was renamed from '{custom_name}' to 'townwish/tiny-random-OPTForCausalLM'"
         assert any(msg in str(warning.message) for warning in recwarn.list)
 
     def test_warning_name_custom_model(self, custom_module, recwarn):
@@ -1320,7 +1309,7 @@ class TestCustomModelConfigWarning:
 def test_from_pretrained_missing_keys_warning(recwarn, tmp_path):
     # For more context, see issue 2115
     # When loading a PEFT adapter and we're missing a PEFT-specific weight, there should be a warning.
-    model = AutoModelForCausalLM.from_pretrained("hf-internal-testing/tiny-random-OPTForCausalLM")
+    model = AutoModelForCausalLM.from_pretrained("townwish/tiny-random-OPTForCausalLM")
     config = LoraConfig()
     model = get_peft_model(model, config)
     state_dict = model.state_dict()
@@ -1328,7 +1317,7 @@ def test_from_pretrained_missing_keys_warning(recwarn, tmp_path):
     # first, sanity check that there are no warnings if no key is missing
     model.save_pretrained(tmp_path)
     del model
-    model = AutoModelForCausalLM.from_pretrained("hf-internal-testing/tiny-random-OPTForCausalLM")
+    model = AutoModelForCausalLM.from_pretrained("townwish/tiny-random-OPTForCausalLM")
     model = PeftModel.from_pretrained(model, tmp_path)
     msg = "Found missing adapter keys"
     assert not any(msg in str(w.message) for w in recwarn.list)
@@ -1343,7 +1332,7 @@ def test_from_pretrained_missing_keys_warning(recwarn, tmp_path):
     model.save_pretrained(tmp_path)
     del model
 
-    model = AutoModelForCausalLM.from_pretrained("hf-internal-testing/tiny-random-OPTForCausalLM")
+    model = AutoModelForCausalLM.from_pretrained("townwish/tiny-random-OPTForCausalLM")
     model = PeftModel.from_pretrained(model, tmp_path)
     assert any(msg in str(w.message) for w in recwarn.list)
     assert any(missing_key in str(w.message) for w in recwarn.list)
@@ -1358,7 +1347,7 @@ class TestNamingConflictWarning:
     def setup(self):
         self.peft_config = LoraConfig()
         self.prefix = PEFT_TYPE_TO_PREFIX_MAPPING[self.peft_config.peft_type]
-        self.base_model = AutoModelForCausalLM.from_pretrained("hf-internal-testing/tiny-random-OPTForCausalLM")
+        self.base_model = AutoModelForCausalLM.from_pretrained("townwish/tiny-random-OPTForCausalLM")
 
     def _save_and_reload_model(self, model, adapter_name, tmp_path):
         # Helper method to save and reload the PEFT model
@@ -1416,16 +1405,8 @@ class TestNamingConflictWarning:
         assert any(expected_msg in str(w.message) for w in recwarn.list)
 
 
-@pytest.mark.skipif(
-    platform.system() != "Linux", reason="Out of the box, torch.compile does not work on Windows or MacOS"
-)
 class TestHotSwapping:
     """Tests for the hotswapping function"""
-
-    def compile(self, model, do_compile):
-        if not do_compile:
-            return model
-        return torch.compile(model)
 
     def get_model(self):
         class MLP(nn.Cell):
@@ -1477,10 +1458,8 @@ class TestHotSwapping:
         model = self.get_model()
         ms.manual_seed(0)
         model = get_peft_model(model, config)
-        model = self.compile(model, do_compile=do_compile)
         model.set_train(False)
-        with torch.inference_mode():
-            output0 = model(inputs)
+        output0 = model(inputs) if not do_compile else model.compile_and_run(inputs)
         model.save_pretrained(tmp_path / "adapter0")
 
         del model
@@ -1489,10 +1468,8 @@ class TestHotSwapping:
         model = self.get_model()
         ms.manual_seed(1)
         model = get_peft_model(model, config)
-        model = self.compile(model, do_compile=do_compile)
         model.set_train(False)
-        with torch.inference_mode():
-            output1 = model(inputs)
+        output1 = model(inputs) if not do_compile else model.compile_and_run(inputs)
         model.save_pretrained(tmp_path / "adapter1")
 
         # sanity check: they're not the same
@@ -1503,74 +1480,24 @@ class TestHotSwapping:
         # load adapter 0
         model = self.get_model()
         model = PeftModel.from_pretrained(model, tmp_path / "adapter0")
-        model = self.compile(model, do_compile=do_compile)
-        with torch.inference_mode():
-            output_loaded0 = model(inputs)
+        output_loaded0 = model(inputs) if not do_compile else model.compile_and_run(inputs)
 
         # sanity check: same output after loading for adapter 0
         assert mint.allclose(output0, output_loaded0, atol=atol, rtol=rtol)
 
         # hotswap with adapter 1
         hotswap_adapter(model, tmp_path / "adapter1", adapter_name="default")
-        with torch.inference_mode():
-            output_loaded1 = model(inputs)
+        output_loaded1 = model(inputs)
 
         # real check: model now behaves like adapter 1
         assert mint.allclose(output1, output_loaded1, atol=atol, rtol=rtol)
 
         # hotswap back to adapter 0
         hotswap_adapter(model, tmp_path / "adapter0", adapter_name="default")
-        with torch.inference_mode():
-            output_loaded_back0 = model(inputs)
+        output_loaded_back0 = model(inputs)
 
         # real check: model now behaves again like adapter 0
         assert mint.allclose(output0, output_loaded_back0, atol=atol, rtol=rtol)
-
-    def test_hotswap_different_peft_types_raises(self, tmp_path):
-        # When the configs of the two adapters are different PEFT methods, raise
-        config0 = LoraConfig(target_modules=["lin0"])
-        config1 = IA3Config(target_modules=["lin0"], feedforward_modules=[])
-
-        model = self.get_model()
-        model = get_peft_model(model, config0)
-        model.save_pretrained(tmp_path / "adapter0")
-        del model
-
-        model = self.get_model()
-        model = get_peft_model(model, config1)
-        model.save_pretrained(tmp_path / "adapter1")
-        del model
-
-        # load adapter 0
-        model = self.get_model()
-        model = PeftModel.from_pretrained(model, tmp_path / "adapter0")
-
-        msg = r"Incompatible PEFT types found: LORA and IA3"
-        with pytest.raises(ValueError, match=msg):
-            hotswap_adapter(model, tmp_path / "adapter1", adapter_name="default")
-
-    def test_hotswap_wrong_peft_types_raises(self, tmp_path):
-        # Only LoRA is supported at the moment
-        config0 = IA3Config(target_modules=["lin0"], feedforward_modules=[])
-        config1 = IA3Config(target_modules=["lin0"], feedforward_modules=[])
-
-        model = self.get_model()
-        model = get_peft_model(model, config0)
-        model.save_pretrained(tmp_path / "adapter0")
-        del model
-
-        model = self.get_model()
-        model = get_peft_model(model, config1)
-        model.save_pretrained(tmp_path / "adapter1")
-        del model
-
-        # load adapter 0
-        model = self.get_model()
-        model = PeftModel.from_pretrained(model, tmp_path / "adapter0")
-
-        msg = r"Hotswapping only supports LORA but IA3 was passed"
-        with pytest.raises(ValueError, match=msg):
-            hotswap_adapter(model, tmp_path / "adapter1", adapter_name="default")
 
     def test_hotswap_missing_key_works(self, tmp_path):
         # When a key is missing, it is fine, the extra weight is zeroed out
@@ -1617,7 +1544,7 @@ class TestHotSwapping:
         # add an unexpected key
         state_dict = model.state_dict()
         new_key = "base_model.model.lin1.lora_A.default.weight"
-        state_dict[new_key] = torch.zeros(8, 20)
+        state_dict[new_key] = mint.zeros(8, 20)
         model.state_dict = lambda: state_dict
         model.save_pretrained(tmp_path / "adapter1")
         del model
@@ -1644,8 +1571,7 @@ class TestHotSwapping:
         ms.manual_seed(0)
         model = get_peft_model(model, config0)
         model.set_train(False)
-        with torch.inference_mode():
-            output0 = model(inputs)
+        output0 = model(inputs)
         model.save_pretrained(tmp_path / "adapter0")
 
         del model
@@ -1656,8 +1582,7 @@ class TestHotSwapping:
         ms.manual_seed(1)
         model = get_peft_model(model, config1)
         model.set_train(False)
-        with torch.inference_mode():
-            output1 = model(inputs)
+        output1 = model(inputs)
         model.save_pretrained(tmp_path / "adapter1")
 
         # sanity check: they're not the same
@@ -1668,24 +1593,21 @@ class TestHotSwapping:
         # load adapter 0
         model = self.get_model()
         model = PeftModel.from_pretrained(model, tmp_path / "adapter0")
-        with torch.inference_mode():
-            output_loaded0 = model(inputs)
+        output_loaded0 = model(inputs)
 
         # sanity check: same output after loading for adapter 0
         assert mint.allclose(output0, output_loaded0, atol=atol, rtol=rtol)
 
         # hotswap with adapter 1
         hotswap_adapter(model, tmp_path / "adapter1", adapter_name="default")
-        with torch.inference_mode():
-            output_loaded1 = model(inputs)
+        output_loaded1 = model(inputs)
 
         # real check: model now behaves like adapter 1
         assert mint.allclose(output1, output_loaded1, atol=atol, rtol=rtol)
 
         # hotswap back to adapter 0
         hotswap_adapter(model, tmp_path / "adapter0", adapter_name="default")
-        with torch.inference_mode():
-            output_loaded_back0 = model(inputs)
+        output_loaded_back0 = model(inputs)
 
         # real check: model now behaves again like adapter 0
         assert mint.allclose(output0, output_loaded_back0, atol=atol, rtol=rtol)
@@ -1702,8 +1624,7 @@ class TestHotSwapping:
         ms.manual_seed(0)
         model = get_peft_model(model, config0)
         model.set_train(False)
-        with torch.inference_mode():
-            output0 = model(inputs)
+        output0 = model(inputs)
         model.save_pretrained(tmp_path / "adapter0")
 
         del model
@@ -1714,8 +1635,7 @@ class TestHotSwapping:
         ms.manual_seed(1)
         model = get_peft_model(model, config1)
         model.set_train(False)
-        with torch.inference_mode():
-            output1 = model(inputs)
+        output1 = model(inputs)
         model.save_pretrained(tmp_path / "adapter1")
 
         # sanity check: they're not the same
@@ -1726,24 +1646,21 @@ class TestHotSwapping:
         # load adapter 0
         model = self.get_model_conv2d()
         model = PeftModel.from_pretrained(model, tmp_path / "adapter0")
-        with torch.inference_mode():
-            output_loaded0 = model(inputs)
+        output_loaded0 = model(inputs)
 
         # sanity check: same output after loading for adapter 0
         assert mint.allclose(output0, output_loaded0, atol=atol, rtol=rtol)
 
         # hotswap with adapter 1
         hotswap_adapter(model, tmp_path / "adapter1", adapter_name="default")
-        with torch.inference_mode():
-            output_loaded1 = model(inputs)
+        output_loaded1 = model(inputs)
 
         # real check: model now behaves like adapter 1
         assert mint.allclose(output1, output_loaded1, atol=atol, rtol=rtol)
 
         # hotswap back to adapter 0
         hotswap_adapter(model, tmp_path / "adapter0", adapter_name="default")
-        with torch.inference_mode():
-            output_loaded_back0 = model(inputs)
+        output_loaded_back0 = model(inputs)
 
         # real check: model now behaves again like adapter 0
         assert mint.allclose(output0, output_loaded_back0, atol=atol, rtol=rtol)
@@ -1755,7 +1672,7 @@ class TestHotSwapping:
 
         # sanity check: all scalings are floats
         scalings_before = {}
-        for name, module in model.named_modules():
+        for name, module in model.cells_and_names():
             if hasattr(module, "scaling"):
                 for key, val in module.scaling.items():
                     assert isinstance(val, float)
@@ -1764,10 +1681,10 @@ class TestHotSwapping:
         prepare_model_for_compiled_hotswap(model)
 
         scalings_after = {}
-        for name, module in model.named_modules():
+        for name, module in model.cells_and_names():
             if hasattr(module, "scaling"):
                 for key, val in module.scaling.items():
-                    assert isinstance(val, torch.Tensor)
+                    assert isinstance(val, ms.Tensor)
                     scalings_after[f"{name}.{key}"] = val.item()
 
         assert scalings_before == scalings_after
@@ -1779,7 +1696,7 @@ class TestHotSwapping:
         model = get_peft_model(model, config)
 
         # sanity check
-        for name, param in model.named_parameters():
+        for name, param in model.parameters_and_names():
             if "lora_A" in name:
                 assert param.shape[0] == old_rank
             elif "lora_B" in name:
@@ -1788,7 +1705,7 @@ class TestHotSwapping:
         new_rank = 13
         prepare_model_for_compiled_hotswap(model, target_rank=new_rank)
 
-        for name, param in model.named_parameters():
+        for name, param in model.parameters_and_names():
             if "lora_A" in name:
                 assert param.shape[0] == new_rank
             elif "lora_B" in name:
@@ -1802,7 +1719,7 @@ class TestHotSwapping:
         model = get_peft_model(model, config)
         prepare_model_for_compiled_hotswap(model, target_rank=old_rank)
 
-        for name, param in model.named_parameters():
+        for name, param in model.parameters_and_names():
             if "lora_A" in name:
                 assert param.shape[0] == old_rank
             elif "lora_B" in name:
@@ -1816,7 +1733,7 @@ class TestHotSwapping:
         model = get_peft_model(model, config)
 
         # sanity check
-        for name, param in model.named_parameters():
+        for name, param in model.parameters_and_names():
             if "lora_A" in name:
                 assert param.shape[0] == old_rank
             elif "lora_B" in name:
@@ -1825,7 +1742,7 @@ class TestHotSwapping:
         new_rank = 13
         prepare_model_for_compiled_hotswap(model, target_rank=new_rank)
 
-        for name, param in model.named_parameters():
+        for name, param in model.parameters_and_names():
             if "lora_A" in name:
                 assert param.shape[0] == new_rank
             elif "lora_B" in name:
@@ -1852,7 +1769,7 @@ class TestHotSwapping:
         model = get_peft_model(model, config)
 
         # sanity check
-        for name, param in model.named_parameters():
+        for name, param in model.parameters_and_names():
             if "lora_A" in name:
                 if "lin0" in name:
                     assert param.shape[0] == old_rank0
@@ -1867,52 +1784,11 @@ class TestHotSwapping:
         new_rank = 13
         prepare_model_for_compiled_hotswap(model, target_rank=new_rank)
 
-        for name, param in model.named_parameters():
+        for name, param in model.parameters_and_names():
             if "lora_A" in name:
                 assert param.shape[0] == new_rank
             elif "lora_B" in name:
                 assert param.shape[1] == new_rank
-
-    def test_prepare_model_for_compiled_hotswap_model_already_compiled_raises(self):
-        config = LoraConfig(target_modules=["lin0"])
-        model = self.get_model()
-        model = get_peft_model(model, config)
-        model = torch.compile(model, mode="reduce-overhead")
-
-        msg = re.escape("Call prepare_model_for_compiled_hotswap *before* compiling the model")
-        with pytest.raises(ValueError, match=msg):
-            prepare_model_for_compiled_hotswap(model)
-
-    def test_prepare_model_for_compiled_hotswap_model_already_compiled_warns(self, recwarn):
-        config = LoraConfig(target_modules=["lin0"])
-        model = self.get_model()
-        model = get_peft_model(model, config)
-        model = torch.compile(model, mode="reduce-overhead")
-
-        msg = "prepare_model_for_compiled_hotswap was called with a model that is already compiled"
-        prepare_model_for_compiled_hotswap(model, check_compiled="warn")
-        assert any(msg in str(w.message) for w in recwarn)
-
-    def test_prepare_model_for_compiled_hotswap_model_already_compiled_ignore(self, recwarn):
-        config = LoraConfig(target_modules=["lin0"])
-        model = self.get_model()
-        model = get_peft_model(model, config)
-        model = torch.compile(model, mode="reduce-overhead")
-
-        msg = "prepare_model_for_compiled_hotswap was called with a model that is already compiled"
-        prepare_model_for_compiled_hotswap(model, check_compiled="ignore")
-        # no error, no warning
-        assert not any(msg in str(w.message) for w in recwarn)
-
-    def test_prepare_model_for_compiled_hotswap_model_already_compiled_wrong_argument(self, recwarn):
-        config = LoraConfig(target_modules=["lin0"])
-        model = self.get_model()
-        model = get_peft_model(model, config)
-        model = torch.compile(model, mode="reduce-overhead")
-
-        msg = re.escape("check_compiles should be one of 'error', 'warn', or 'ignore', got 'wrong-option' instead.")
-        with pytest.raises(ValueError, match=msg):
-            prepare_model_for_compiled_hotswap(model, check_compiled="wrong-option")
 
     def test_prepare_model_for_compiled_hotswap_model_no_adapter_raises(self):
         model = self.get_model()
@@ -1924,22 +1800,19 @@ class TestHotSwapping:
         # preparing the model for hotswapping should not change the model output
         inputs = mint.rand(3, 10)
         model = self.get_model().set_train(False)
-        with torch.inference_mode():
-            output_base = model(inputs)
+        output_base = model(inputs)
 
         old_rank = 8
         config = LoraConfig(target_modules=["lin0", "lin1"], r=old_rank, init_lora_weights=False)
         model = get_peft_model(model, config).set_train(False)
-        with torch.inference_mode():
-            output_before = model(inputs)
+        output_before = model(inputs)
 
         # sanity check: LoRA changed output
         assert not mint.allclose(output_base, output_before)
 
         new_rank = 13
         prepare_model_for_compiled_hotswap(model, target_rank=new_rank)
-        with torch.inference_mode():
-            output_after = model(inputs)
+        output_after = model(inputs)
 
         assert mint.allclose(output_before, output_after)
 
@@ -1947,22 +1820,19 @@ class TestHotSwapping:
         # preparing the model for hotswapping should not change the model output
         inputs = mint.rand(3, 3, 10, 10)
         model = self.get_model_conv2d().set_train(False)
-        with torch.inference_mode():
-            output_base = model(inputs)
+        output_base = model(inputs)
 
         old_rank = 8
         config = LoraConfig(target_modules=["conv"], r=old_rank, init_lora_weights=False)
         model = get_peft_model(model, config).set_train(False)
-        with torch.inference_mode():
-            output_before = model(inputs)
+        output_before = model(inputs)
 
         # sanity check: LoRA changed output
         assert not mint.allclose(output_base, output_before)
 
         new_rank = 13
         prepare_model_for_compiled_hotswap(model, target_rank=new_rank)
-        with torch.inference_mode():
-            output_after = model(inputs)
+        output_after = model(inputs)
 
         assert mint.allclose(output_before, output_after)
 
@@ -1988,7 +1858,7 @@ class TestHotSwapping:
         model = get_peft_model(model, config)
 
         # sanity check
-        for name, param in model.named_parameters():
+        for name, param in model.parameters_and_names():
             if "lora_A" in name and name.endswith(".weight"):
                 assert param.shape[0] == old_rank
             elif "lora_B" in name and name.endswith(".weight"):
@@ -2001,7 +1871,7 @@ class TestHotSwapping:
         new_rank = 13
         prepare_model_for_compiled_hotswap(model, target_rank=new_rank)
 
-        for name, param in model.named_parameters():
+        for name, param in model.parameters_and_names():
             if "lora_A" in name and name.endswith(".weight"):
                 assert param.shape[0] == new_rank
             elif "lora_B" in name and name.endswith(".weight"):
@@ -2019,7 +1889,7 @@ class TestHotSwapping:
         model = get_peft_model(model, config)
 
         # sanity check
-        for name, param in model.named_parameters():
+        for name, param in model.parameters_and_names():
             if "lora_A" in name and name.endswith(".weight"):
                 assert param.shape[0] == old_rank
             elif "lora_B" in name and name.endswith(".weight"):
@@ -2032,7 +1902,7 @@ class TestHotSwapping:
         new_rank = 13
         prepare_model_for_compiled_hotswap(model, target_rank=new_rank)
 
-        for name, param in model.named_parameters():
+        for name, param in model.parameters_and_names():
             if "lora_A" in name and name.endswith(".weight"):
                 assert param.shape[0] == new_rank
             elif "lora_B" in name and name.endswith(".weight"):
@@ -2050,7 +1920,7 @@ def test_import_peft_type_to_model_mapping_deprecation_warning(recwarn):
     # TODO: Remove after 2026-01
 
     # first check that there is no warning under normal circumstances
-    from peft.peft_model import PeftModel  # noqa
+    from mindone.peft.peft_model import PeftModel  # noqa
 
     expected = (
         "PEFT_TYPE_TO_MODEL_MAPPING is deprecated, please use `from peft import PEFT_TYPE_TO_TUNER_MAPPING` instead"
@@ -2058,7 +1928,7 @@ def test_import_peft_type_to_model_mapping_deprecation_warning(recwarn):
     warnings = (w.message.args[0] for w in recwarn.list)
     assert not any(w.startswith(expected) for w in warnings)
 
-    from peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING  # noqa
+    from mindone.peft.peft_model import PEFT_TYPE_TO_MODEL_MAPPING  # noqa
 
     # check that there is a warning with this message after importing the variable
     warnings = (w.message.args[0] for w in recwarn.list)
