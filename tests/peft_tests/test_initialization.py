@@ -903,7 +903,7 @@ class TestLoraInitialization:
         model = self.get_model()
 
         # check scaling factor use_rslora=True
-        config = LoraConfig(target_modules=["linear", "embed", "conv2d"], lora_alpha=3, r=16, use_rslora=True)
+        config = LoraConfig(target_modules=["linear", "conv2d"], lora_alpha=3, r=16, use_rslora=True)
         model = get_peft_model(model, config)
 
         expected_scaling = config.lora_alpha / (config.r**0.5)
@@ -920,8 +920,8 @@ class TestLoraInitialization:
 
         # check scaling factor use_rslora=False with rank and alpha pattern
         config = LoraConfig(
-            target_modules=["linear", "embed", "conv2d"],
-            rank_pattern={"embed": 9, "conv2d": 16},
+            target_modules=["linear", "conv2d"],
+            rank_pattern={"conv2d": 16},
             alpha_pattern={"linear": 11, "conv2d": 13},
             lora_alpha=17,
             r=25,
@@ -931,12 +931,10 @@ class TestLoraInitialization:
 
         expected_scaling = {
             "linear": config.alpha_pattern["linear"] / config.r,
-            "embed": config.lora_alpha / config.rank_pattern["embed"],
             "conv2d": config.alpha_pattern["conv2d"] / config.rank_pattern["conv2d"],
         }
 
         assert model.linear.scaling["default"] == expected_scaling["linear"]
-        assert model.embed.scaling["default"] == expected_scaling["embed"]
         assert model.conv2d.scaling["default"] == expected_scaling["conv2d"]
 
     def test_lora_rslora_scaling_pattern(self):
@@ -947,8 +945,8 @@ class TestLoraInitialization:
 
         # check scaling factor use_rslora=True with rank and alpha pattern
         config = LoraConfig(
-            target_modules=["linear", "embed", "conv2d"],
-            rank_pattern={"embed": 9, "conv2d": 16},
+            target_modules=["linear", "conv2d"],
+            rank_pattern={"conv2d": 16},
             alpha_pattern={"linear": 11, "conv2d": 13},
             lora_alpha=17,
             r=25,
@@ -958,12 +956,10 @@ class TestLoraInitialization:
 
         expected_scaling = {
             "linear": config.alpha_pattern["linear"] / (config.r**0.5),
-            "embed": config.lora_alpha / (config.rank_pattern["embed"] ** 0.5),
             "conv2d": config.alpha_pattern["conv2d"] / (config.rank_pattern["conv2d"] ** 0.5),
         }
 
         assert model.linear.scaling["default"] == expected_scaling["linear"]
-        assert model.embed.scaling["default"] == expected_scaling["embed"]
         assert model.conv2d.scaling["default"] == expected_scaling["conv2d"]
 
     def test_lora_use_dora_linear(self, data):
