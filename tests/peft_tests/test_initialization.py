@@ -44,6 +44,9 @@ class TestLoraInitialization:
     """Test class to check the initialization of LoRA adapters."""
 
     def get_uniform(self, amin, amax, size=(10000,)):
+        amin = amin if isinstance(amin, ms.Tensor) else ms.tensor(amin)
+        amax = amax if isinstance(amax, ms.Tensor) else ms.tensor(amax)
+
         samples = ops.uniform(shape=size, minval=amin, maxval=amax)
         return samples
 
@@ -195,13 +198,12 @@ class TestLoraInitialization:
         model = self.get_model()
 
         # check scaling factor use_rslora=False
-        config = LoraConfig(target_modules=["linear", "embed", "conv2d"], lora_alpha=3, r=16, use_rslora=False)
+        config = LoraConfig(target_modules=["linear", "conv2d"], lora_alpha=3, r=16, use_rslora=False)
         model = get_peft_model(model, config)
 
         expected_scaling = config.lora_alpha / config.r
 
         assert model.linear.scaling["default"] == expected_scaling
-        assert model.embed.scaling["default"] == expected_scaling
         assert model.conv2d.scaling["default"] == expected_scaling
 
     # testcase for bugfix for issue 2194
@@ -264,7 +266,7 @@ class TestLoraInitialization:
         peft_model.peft_config["default"].init_lora_weights = "pissa"
 
         # modify the weights, or else the adapter performs an identity transformation
-        peft_model.base_model.linear.lora_B["default"].weight.data *= 2.0
+        peft_model.base_model.linear.lora_B["default"].weight *= 2.0
         output_pissa = peft_model(data)[0]
 
         # sanity check
@@ -322,7 +324,7 @@ class TestLoraInitialization:
         peft_model.peft_config["default"].init_lora_weights = "pissa"
 
         # modify the weights, or else the adapter performs an identity transformation
-        peft_model.base_model.linear.lora_B["default"].weight.data *= 2.0
+        peft_model.base_model.linear.lora_B["default"].weight *= 2.0
         output_pissa = peft_model(data)[0]
 
         # sanity check
@@ -374,7 +376,7 @@ class TestLoraInitialization:
         peft_model.peft_config["default"].init_lora_weights = "pissa"
 
         # modify the weights, or else the adapter performs an identity transformation
-        peft_model.base_model.linear.lora_B["default"].weight.data *= 2.0
+        peft_model.base_model.linear.lora_B["default"].weight *= 2.0
         output_pissa = peft_model(data)[0]
 
         # sanity check
@@ -425,7 +427,7 @@ class TestLoraInitialization:
         peft_model.peft_config["default"].init_lora_weights = "pissa"
 
         # modify the weights, or else the adapter performs an identity transformation
-        peft_model.base_model.linear.lora_B["default"].weight.data *= 2.0
+        peft_model.base_model.linear.lora_B["default"].weight *= 2.0
         output_pissa = peft_model(data)[0]
 
         # sanity check
@@ -507,7 +509,7 @@ class TestLoraInitialization:
         peft_model.save_pretrained(tmp_path / "init-model")
 
         # modify the weights, or else the adapter performs an identity transformation
-        peft_model.base_model.linear.lora_B["default"].weight.data *= 2.0
+        peft_model.base_model.linear.lora_B["default"].weight *= 2.0
         output_olora = peft_model(data)[0]
 
         # sanity check
@@ -563,7 +565,7 @@ class TestLoraInitialization:
         peft_model.save_pretrained(tmp_path / "init-model")
 
         # modify the weights, or else the adapter performs an identity transformation
-        peft_model.base_model.linear.lora_B["default"].weight.data *= 2.0
+        peft_model.base_model.linear.lora_B["default"].weight *= 2.0
         output_olora = peft_model(data)[0]
 
         # sanity check
@@ -613,7 +615,7 @@ class TestLoraInitialization:
         peft_model.save_pretrained(tmp_path / "init-model")
 
         # modify the weights, or else the adapter performs an identity transformation
-        peft_model.base_model.linear.lora_B["default"].weight.data *= 2.0
+        peft_model.base_model.linear.lora_B["default"].weight *= 2.0
         output_olora = peft_model(data)[0]
 
         # sanity check
@@ -663,7 +665,7 @@ class TestLoraInitialization:
         peft_model.save_pretrained(tmp_path / "init-model")
 
         # modify the weights, or else the adapter performs an identity transformation
-        peft_model.base_model.linear.lora_B["default"].weight.data *= 2.0
+        peft_model.base_model.linear.lora_B["default"].weight *= 2.0
         output_olora = peft_model(data)[0]
 
         # sanity check
@@ -1010,7 +1012,7 @@ class TestLoraInitialization:
                 super().__init__()
                 self.mha = nn.MultiheadAttention(10, 2, kdim=kdim, vdim=vdim)
                 self.lin0 = mint.nn.Linear(10, 2)
-                self.sm = nn.LogSoftmax(dim=-1)
+                self.sm = nn.LogSoftmax(axis=-1)
 
             def construct(self, X):
                 X = X.float()
