@@ -962,45 +962,6 @@ class TestLoraInitialization:
         assert model.linear.scaling["default"] == expected_scaling["linear"]
         assert model.conv2d.scaling["default"] == expected_scaling["conv2d"]
 
-    def test_lora_use_dora_linear(self, data):
-        # check that dora is a no-op when initialized
-        ms.manual_seed(0)
-        model = self.get_model()
-        output_base, _, _ = model(data)
-
-        # check scaling factor use_rslora=True
-        config = LoraConfig(target_modules=["linear"], use_dora=True)
-        model = get_peft_model(model, config)
-
-        with model.disable_adapter():
-            output_disabled, _, _ = model(data)
-        output_dora, _, _ = model(data)
-
-        assert mint.allclose(output_base, output_disabled)
-        assert mint.allclose(output_base, output_dora)
-
-    def test_lora_use_dora_linear_init_false(self, data):
-        # with init_lora_weights=False, dora should not be a no-op
-        ms.manual_seed(0)
-        model = self.get_model()
-        output_base, _, _ = model(data)
-
-        # check scaling factor use_rslora=True
-        config = LoraConfig(target_modules=["linear"], use_dora=True, init_lora_weights=False)
-        model = get_peft_model(model, config)
-
-        with model.disable_adapter():
-            output_disabled, _, _ = model(data)
-        output_dora, _, _ = model(data)
-
-        assert mint.allclose(output_base, output_disabled)
-        assert not mint.allclose(output_base, output_dora)
-
-    def test_lora_use_dora_with_megatron_core_raises(self):
-        megatron_config = {"does-not": "matter-here"}
-        with pytest.raises(ValueError, match="DoRA does not support megatron_core"):
-            LoraConfig(target_modules=["linear"], use_dora=True, megatron_config=megatron_config)
-
     @pytest.fixture
     def mha_cls(self):
         class ModelMha(nn.Cell):
@@ -1047,13 +1008,6 @@ class TestLoraInitialization:
         model = mha_cls(kdim=20, vdim=30)
         config = LoraConfig(target_modules=["mha"])
         msg = "Only same embed for query/key/value is supported as of now for MultiheadAttention"
-        with pytest.raises(ValueError, match=msg):
-            get_peft_model(model, config)
-
-    def test_mha_with_dora_raises(self, mha_cls):
-        model = mha_cls()
-        config = LoraConfig(target_modules=["mha"], use_dora=True)
-        msg = re.escape("MultiheadAttention does not support DoRA (yet), please set use_dora to False")
         with pytest.raises(ValueError, match=msg):
             get_peft_model(model, config)
 
@@ -1148,7 +1102,6 @@ class TestLoraInitialization:
     @pytest.mark.parametrize(
         "extra_kwargs",
         [
-            {"use_dora": True},
             {"init_lora_weights": "eva"},
             {"init_lora_weights": "gaussian"},
             {"init_lora_weights": "olora"},

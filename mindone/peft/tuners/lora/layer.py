@@ -240,6 +240,7 @@ class LoraLayer(BaseTunerLayer):
         if init_lora_weights == "pissa":
             # USV^T = W <-> VSU^T = W^T, where W^T = weight.data in R^{out_channel, in_channel},
             S, Uh, V = ops.svd(weight, full_matrices=False)
+            V = V.T
             Vr = V[:, : self.r[adapter_name]]
             Sr = S[: self.r[adapter_name]]
             Sr /= self.scaling[adapter_name]
