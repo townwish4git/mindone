@@ -55,6 +55,7 @@ from .utils import (
     _set_trainable,
     get_peft_model_state_dict,
     load_peft_weights,
+    refresh_parameter_name_of_model,
     set_peft_model_state_dict,
 )
 
@@ -944,6 +945,7 @@ class PeftModel(PushToHubMixin, nn.Cell):
             self._check_new_adapter_config(peft_config, is_trainable=is_trainable)
             peft_config.inference_mode = not is_trainable
             self.add_adapter(adapter_name, peft_config)
+            refresh_parameter_name_of_model(self, only_peft=True)  # Only MindSpore can do
 
         adapters_weights = load_peft_weights(model_id, **hf_hub_download_kwargs)
 
@@ -1367,7 +1369,7 @@ def get_layer_status(model: nn.Cell) -> list[TunerLayerStatus]:
         base_model = model
 
     layer_status: list[TunerLayerStatus] = []
-    for name, module in base_model.named_cells():
+    for name, module in base_model.name_cells():
         if not isinstance(module, BaseTunerLayer):
             continue
 

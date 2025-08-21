@@ -43,6 +43,7 @@ from .other import (
     bloom_model_postprocess_past_key_value,
     cast_mixed_precision_params,
     prepare_model_for_kbit_training,
+    refresh_parameter_name_of_model,
     shift_tokens_right,
     transpose,
 )
@@ -82,6 +83,7 @@ __all__ = [
     "load_peft_weights",
     "prepare_model_for_kbit_training",
     "register_peft_method",
+    "refresh_parameter_name_of_model",
     "set_peft_model_state_dict",
     "shift_tokens_right",
     "transpose",
