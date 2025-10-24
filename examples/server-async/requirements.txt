@@ -1,9 +1,9 @@
-torch 
-torchvision 
-transformers 
-sentencepiece 
-fastapi 
-uvicorn 
+torch
+torchvision
+transformers
+sentencepiece
+fastapi
+uvicorn
 ftfy
 accelerate
 xformers

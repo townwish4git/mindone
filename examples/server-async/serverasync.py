@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Type
 
-import torch
+import numpy as np
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,7 +16,9 @@ from fastapi.responses import FileResponse
 from Pipelines import ModelPipelineInitializer
 from pydantic import BaseModel
 
-from utils import RequestScopedPipeline, Utils
+import mindspore as ms
+
+from utils import RequestScopedPipeline, Utils  # isort: skip
 
 
 @dataclass
@@ -26,7 +28,7 @@ class ServerConfigModels:
     constructor_pipeline: Optional[Type] = None
     custom_pipeline: Optional[Type] = None
     components: Optional[Dict[str, Any]] = None
-    torch_dtype: Optional[torch.dtype] = None
+    mindspore_dtype: Optional[ms.Type] = None
     host: str = "0.0.0.0"
     port: int = 8500
 
@@ -38,8 +40,12 @@ server_config = ServerConfigModels()
 async def lifespan(app: FastAPI):
     logging.basicConfig(level=logging.INFO)
     app.state.logger = logging.getLogger("diffusers-server")
-    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128,expandable_segments:True"
-    os.environ["CUDA_LAUNCH_BLOCKING"] = "0"
+    # os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128,expandable_segments:True"
+    # os.environ["CUDA_LAUNCH_BLOCKING"] = "0"
+    os.environ[
+        "MS_ALLOC_CONF"
+    ] = "enable_vmm:true"  # seems that there is no counterpart for MindSpore like `max_split_size_mb`
+    os.environ["ASCEND_LAUNCH_BLOCKING"] = "0"
 
     app.state.total_requests = 0
     app.state.active_inferences = 0
@@ -138,7 +144,7 @@ async def api(json: JSONBodyQueryAPI):
     num_images_per_prompt = json.num_images_per_prompt
 
     wrapper = app.state.MODEL_PIPELINE
-    initializer = app.state.MODEL_INITIALIZER
+    initializer = app.state.MODEL_INITIALIZER  # noqa: F841
 
     utils_app = app.state.utils_app
 
@@ -148,8 +154,7 @@ async def api(json: JSONBodyQueryAPI):
         raise HTTPException(400, "No prompt provided")
 
     def make_generator():
-        g = torch.Generator(device=initializer.device)
-        return g.manual_seed(random.randint(0, 10_000_000))
+        return np.random.Generator(np.random.PCG64(random.randint(0, 10_000_000)))
 
     req_pipe = app.state.REQUEST_PIPE
 
@@ -161,7 +166,6 @@ async def api(json: JSONBodyQueryAPI):
             generator=gen,
             num_inference_steps=num_steps,
             num_images_per_prompt=num_images_per_prompt,
-            device=initializer.device,
             output_type="pil",
         )
 
@@ -184,11 +188,11 @@ async def api(json: JSONBodyQueryAPI):
         raise HTTPException(500, f"Error in processing: {e}")
 
     finally:
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-            torch.cuda.empty_cache()
-            torch.cuda.reset_peak_memory_stats()
-            torch.cuda.ipc_collect()
+        if ms.device_context.ascend.is_available():
+            ms.runtime.synchronize()
+            ms.runtime.empty_cache()
+            ms.runtime.reset_peak_memory_stats()
+            # torch.cuda.ipc_collect()  # Seems there is no counterpart for MindSpore
         gc.collect()
 
 
@@ -204,13 +208,12 @@ async def serve_image(filename: str):
 @app.get("/api/status")
 async def get_status():
     memory_info = {}
-    if torch.cuda.is_available():
-        memory_allocated = torch.cuda.memory_allocated() / 1024**3  # GB
-        memory_reserved = torch.cuda.memory_reserved() / 1024**3  # GB
+    if ms.device_context.ascend.is_available():
+        memory_allocated = ms.runtime.memory_allocated() / 1024**3  # GB
+        memory_reserved = ms.runtime.memory_reserved() / 1024**3  # GB
         memory_info = {
             "memory_allocated_gb": round(memory_allocated, 2),
             "memory_reserved_gb": round(memory_reserved, 2),
-            "device": torch.cuda.get_device_name(0),
         }
 
     return {"current_model": server_config.model, "type_models": server_config.type_models, "memory": memory_info}

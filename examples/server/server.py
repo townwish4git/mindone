@@ -14,8 +14,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import mindspore as ms
-from mindone.diffusers.pipelines.stable_diffusion_3 import StableDiffusion3Pipeline
 
+from mindone.diffusers.pipelines.stable_diffusion_3 import StableDiffusion3Pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class TextToImagePipeline:
     pipeline: StableDiffusion3Pipeline = None
 
     def start(self):
-        if ms.hal.is_available("Ascend"):
+        if ms.device_context.ascend.is_available():
             model_path = os.getenv("MODEL_PATH", "stabilityai/stable-diffusion-3.5-large")
             logger.info("Loading Ascend")
             self.pipeline = StableDiffusion3Pipeline.from_pretrained(

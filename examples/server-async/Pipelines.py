@@ -3,11 +3,11 @@ import os
 from dataclasses import dataclass, field
 from typing import List
 
-import torch
 from pydantic import BaseModel
 
-from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import StableDiffusion3Pipeline
+import mindspore as ms
 
+from mindone.diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import StableDiffusion3Pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -35,27 +35,17 @@ class TextToImagePipelineSD3:
     def __init__(self, model_path: str | None = None):
         self.model_path = model_path or os.getenv("MODEL_PATH")
         self.pipeline: StableDiffusion3Pipeline | None = None
-        self.device: str | None = None
 
     def start(self):
-        if torch.cuda.is_available():
+        if ms.device_context.ascend.is_available():
             model_path = self.model_path or "stabilityai/stable-diffusion-3.5-large"
-            logger.info("Loading CUDA")
-            self.device = "cuda"
+            logger.info("Loading Ascend")
             self.pipeline = StableDiffusion3Pipeline.from_pretrained(
                 model_path,
-                torch_dtype=torch.float16,
-            ).to(device=self.device)
-        elif torch.backends.mps.is_available():
-            model_path = self.model_path or "stabilityai/stable-diffusion-3.5-medium"
-            logger.info("Loading MPS for Mac M Series")
-            self.device = "mps"
-            self.pipeline = StableDiffusion3Pipeline.from_pretrained(
-                model_path,
-                torch_dtype=torch.bfloat16,
-            ).to(device=self.device)
+                mindspore_dtype=ms.float16,
+            )
         else:
-            raise Exception("No CUDA or MPS device available")
+            raise Exception("No Ascend device available")
 
 
 class ModelPipelineInitializer:
@@ -63,7 +53,6 @@ class ModelPipelineInitializer:
         self.model = model
         self.type_models = type_models
         self.pipeline = None
-        self.device = "cuda" if torch.cuda.is_available() else "mps"
         self.model_type = None
 
     def initialize_pipeline(self):

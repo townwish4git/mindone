@@ -1,8 +1,6 @@
 import copy
 import inspect
-from typing import Any, List, Optional, Union
-
-import torch
+from typing import Any, List, Optional
 
 
 class BaseAsyncScheduler:
@@ -23,9 +21,9 @@ class BaseAsyncScheduler:
             else:
                 super().__setattr__(name, value)
 
-    def clone_for_request(self, num_inference_steps: int, device: Union[str, torch.device, None] = None, **kwargs):
+    def clone_for_request(self, num_inference_steps: int, **kwargs):
         local = copy.deepcopy(self.scheduler)
-        local.set_timesteps(num_inference_steps=num_inference_steps, device=device, **kwargs)
+        local.set_timesteps(num_inference_steps=num_inference_steps, **kwargs)
         cloned = self.__class__(local)
         return cloned
 
@@ -39,7 +37,6 @@ class BaseAsyncScheduler:
 def async_retrieve_timesteps(
     scheduler,
     num_inference_steps: Optional[int] = None,
-    device: Optional[Union[str, torch.device]] = None,
     timesteps: Optional[List[int]] = None,
     sigmas: Optional[List[float]] = None,
     **kwargs,
@@ -62,8 +59,6 @@ def async_retrieve_timesteps(
         num_inference_steps (`int`):
             The number of diffusion steps used when generating samples with a pre-trained model. If used, `timesteps`
             must be `None`.
-        device (`str` or `torch.device`, *optional*):
-            The device to which the timesteps should be moved to. If `None`, the timesteps are not moved.
         timesteps (`List[int]`, *optional*):
             Custom timesteps used to override the timestep spacing strategy of the scheduler. If `timesteps` is passed,
             `num_inference_steps` and `sigmas` must be `None`.
@@ -93,9 +88,7 @@ def async_retrieve_timesteps(
         if hasattr(scheduler, "clone_for_request"):
             try:
                 # clone_for_request may accept num_inference_steps or other kwargs; be permissive
-                scheduler_in_use = scheduler.clone_for_request(
-                    num_inference_steps=num_inference_steps or 0, device=device
-                )
+                scheduler_in_use = scheduler.clone_for_request(num_inference_steps=num_inference_steps or 0)
             except Exception:
                 scheduler_in_use = copy.deepcopy(scheduler)
         else:
@@ -118,7 +111,7 @@ def async_retrieve_timesteps(
                 f"The current scheduler class {scheduler_in_use.__class__}'s `set_timesteps` does not support custom"
                 f" timestep schedules. Please check whether you are using the correct scheduler."
             )
-        scheduler_in_use.set_timesteps(timesteps=timesteps, device=device, **kwargs)
+        scheduler_in_use.set_timesteps(timesteps=timesteps, **kwargs)
         timesteps_out = scheduler_in_use.timesteps
         num_inference_steps = len(timesteps_out)
     elif sigmas is not None:
@@ -128,12 +121,12 @@ def async_retrieve_timesteps(
                 f"The current scheduler class {scheduler_in_use.__class__}'s `set_timesteps` does not support custom"
                 f" sigmas schedules. Please check whether you are using the correct scheduler."
             )
-        scheduler_in_use.set_timesteps(sigmas=sigmas, device=device, **kwargs)
+        scheduler_in_use.set_timesteps(sigmas=sigmas, **kwargs)
         timesteps_out = scheduler_in_use.timesteps
         num_inference_steps = len(timesteps_out)
     else:
         # default path
-        scheduler_in_use.set_timesteps(num_inference_steps, device=device, **kwargs)
+        scheduler_in_use.set_timesteps(num_inference_steps, **kwargs)
         timesteps_out = scheduler_in_use.timesteps
 
     if return_scheduler:

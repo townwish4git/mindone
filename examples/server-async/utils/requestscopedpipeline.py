@@ -2,12 +2,11 @@ import copy
 import threading
 from typing import Any, Iterable, List, Optional
 
-import torch
+import mindspore as ms
 
-from diffusers.utils import logging
+from mindone.diffusers.utils import logging
 
 from .scheduler import BaseAsyncScheduler, async_retrieve_timesteps
-
 
 logger = logging.get_logger(__name__)
 
@@ -55,7 +54,7 @@ class RequestScopedPipeline:
 
         self._auto_detected_attrs: List[str] = []
 
-    def _make_local_scheduler(self, num_inference_steps: int, device: Optional[str] = None, **clone_kwargs):
+    def _make_local_scheduler(self, num_inference_steps: int, **clone_kwargs):
         base_sched = getattr(self._base, "scheduler", None)
         if base_sched is None:
             return None
@@ -66,9 +65,7 @@ class RequestScopedPipeline:
             wrapped_scheduler = base_sched
 
         try:
-            return wrapped_scheduler.clone_for_request(
-                num_inference_steps=num_inference_steps, device=device, **clone_kwargs
-            )
+            return wrapped_scheduler.clone_for_request(num_inference_steps=num_inference_steps, **clone_kwargs)
         except Exception as e:
             logger.debug(f"clone_for_request failed: {e}; falling back to deepcopy()")
             try:
@@ -111,7 +108,7 @@ class RequestScopedPipeline:
             else:
                 # try Tensor detection
                 try:
-                    if isinstance(val, torch.Tensor):
+                    if isinstance(val, ms.Tensor):
                         if val.numel() <= self._tensor_numel_threshold:
                             candidates.append(name)
                             seen.add(name)
@@ -172,9 +169,9 @@ class RequestScopedPipeline:
                     setattr(local, attr, bytearray(val))
                 else:
                     # small tensors or atomic values
-                    if isinstance(val, torch.Tensor):
+                    if isinstance(val, ms.Tensor):
                         if val.numel() <= self._tensor_numel_threshold:
-                            setattr(local, attr, val.clone())
+                            setattr(local, attr, val.copy())
                         else:
                             # don't clone big tensors, keep reference
                             setattr(local, attr, val)
@@ -205,8 +202,8 @@ class RequestScopedPipeline:
 
         return has_tokenizer_methods and (has_tokenizer_in_name or has_tokenizer_attrs)
 
-    def generate(self, *args, num_inference_steps: int = 50, device: Optional[str] = None, **kwargs):
-        local_scheduler = self._make_local_scheduler(num_inference_steps=num_inference_steps, device=device)
+    def generate(self, *args, num_inference_steps: int = 50, **kwargs):
+        local_scheduler = self._make_local_scheduler(num_inference_steps=num_inference_steps)
 
         try:
             local_pipe = copy.copy(self._base)
@@ -219,7 +216,6 @@ class RequestScopedPipeline:
                 timesteps, num_steps, configured_scheduler = async_retrieve_timesteps(
                     local_scheduler.scheduler,
                     num_inference_steps=num_inference_steps,
-                    device=device,
                     return_scheduler=True,
                     **{k: v for k, v in kwargs.items() if k in ["timesteps", "sigmas"]},
                 )
