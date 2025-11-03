@@ -43,7 +43,7 @@ async def generate_image(image_input: TextToImageInput):
         generator.manual_seed(random.randint(0, 10000000))
         output = await loop.run_in_executor(None, lambda: pipeline(image_input.prompt, generator = generator))
         logger.info(f"output: {output}")
-        image_url = save_image(output.images[0])
+        image_url = save_image(output[0][0])
         return {"data": [{"url": image_url}]}
     except Exception as e:
         if isinstance(e, HTTPException):

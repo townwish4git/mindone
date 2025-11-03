@@ -1,7 +1,7 @@
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 class TextToImageInput(BaseModel):
     model: str
     prompt: str
-    size: str | None = None
-    n: int | None = None
+    size: Optional[str] = None
+    n: Optional[int] = None
 
 
 @dataclass
@@ -32,9 +32,9 @@ class PresetModels:
 
 
 class TextToImagePipelineSD3:
-    def __init__(self, model_path: str | None = None):
+    def __init__(self, model_path: Optional[str] = None):
         self.model_path = model_path or os.getenv("MODEL_PATH")
-        self.pipeline: StableDiffusion3Pipeline | None = None
+        self.pipeline: Optional[StableDiffusion3Pipeline] = None
 
     def start(self):
         if ms.device_context.ascend.is_available():

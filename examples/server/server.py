@@ -1,10 +1,10 @@
-import asyncio
 import logging
 import os
 import random
 import tempfile
 import traceback
 import uuid
+from typing import Optional
 
 import aiohttp
 import numpy as np
@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 class TextToImageInput(BaseModel):
     model: str
     prompt: str
-    size: str | None = None
-    n: int | None = None
+    size: Optional[str] = None
+    n: Optional[int] = None
 
 
 class HttpClient:
@@ -101,11 +101,10 @@ async def base():
 @app.post("/v1/images/generations")
 async def generate_image(image_input: TextToImageInput):
     try:
-        loop = asyncio.get_event_loop()
         scheduler = shared_pipeline.pipeline.scheduler.from_config(shared_pipeline.pipeline.scheduler.config)
         pipeline = StableDiffusion3Pipeline.from_pipe(shared_pipeline.pipeline, scheduler=scheduler)
         generator = np.random.Generator(np.random.PCG64(random.randint(0, 10000000)))
-        output = await loop.run_in_executor(None, lambda: pipeline(image_input.prompt, generator=generator))
+        output = pipeline(image_input.prompt, generator=generator)
         logger.info(f"output: {output}")
         image_url = save_image(output[0][0])
         return {"data": [{"url": image_url}]}

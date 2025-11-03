@@ -116,9 +116,9 @@ app.state.PIPELINE_LOCK = pipeline_lock
 
 
 class JSONBodyQueryAPI(BaseModel):
-    model: str | None = None
+    model: Optional[str] = None
     prompt: str
-    negative_prompt: str | None = None
+    negative_prompt: Optional[str] = None
     num_inference_steps: int = 28
     num_images_per_prompt: int = 1
 
@@ -173,12 +173,13 @@ async def api(json: JSONBodyQueryAPI):
         async with app.state.metrics_lock:
             app.state.active_inferences += 1
 
-        output = await run_in_threadpool(infer)
+        # output = await run_in_threadpool(infer)
+        output = infer()  # MindSpore seems not to work well with multiple threads
 
         async with app.state.metrics_lock:
             app.state.active_inferences = max(0, app.state.active_inferences - 1)
 
-        urls = [utils_app.save_image(img) for img in output.images]
+        urls = [utils_app.save_image(img) for img in output[0]]
         return {"response": urls}
 
     except Exception as e:
