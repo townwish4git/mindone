@@ -1,3 +1,5 @@
+import asyncio
+import concurrent.futures
 import logging
 import os
 import random
@@ -65,6 +67,7 @@ if not os.path.exists(image_dir):
 app.mount("/images", StaticFiles(directory=image_dir), name="images")
 http_client = HttpClient()
 shared_pipeline = TextToImagePipeline()
+thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
 # Configure CORS settings
 app.add_middleware(
@@ -101,10 +104,11 @@ async def base():
 @app.post("/v1/images/generations")
 async def generate_image(image_input: TextToImageInput):
     try:
+        loop = asyncio.get_event_loop()
         scheduler = shared_pipeline.pipeline.scheduler.from_config(shared_pipeline.pipeline.scheduler.config)
         pipeline = StableDiffusion3Pipeline.from_pipe(shared_pipeline.pipeline, scheduler=scheduler)
         generator = np.random.Generator(np.random.PCG64(random.randint(0, 10000000)))
-        output = pipeline(image_input.prompt, generator=generator)
+        output = await loop.run_in_executor(thread_pool, lambda: pipeline(image_input.prompt, generator=generator))
         logger.info(f"output: {output}")
         image_url = save_image(output[0][0])
         return {"data": [{"url": image_url}]}

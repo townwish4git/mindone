@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import gc
 import logging
 import os
@@ -106,6 +107,7 @@ model_pipeline.start()
 
 request_pipe = RequestScopedPipeline(model_pipeline.pipeline)
 pipeline_lock = threading.Lock()
+thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
 logger.info(f"Pipeline initialized and ready to receive requests (model ={server_config.model})")
 
@@ -113,6 +115,7 @@ app.state.MODEL_INITIALIZER = initializer
 app.state.MODEL_PIPELINE = model_pipeline
 app.state.REQUEST_PIPE = request_pipe
 app.state.PIPELINE_LOCK = pipeline_lock
+app.state.THREAD_POOL = thread_pool
 
 
 class JSONBodyQueryAPI(BaseModel):
@@ -157,6 +160,7 @@ async def api(json: JSONBodyQueryAPI):
         return np.random.Generator(np.random.PCG64(random.randint(0, 10_000_000)))
 
     req_pipe = app.state.REQUEST_PIPE
+    thread_pool = app.state.THREAD_POOL
 
     def infer():
         gen = make_generator()
@@ -174,7 +178,8 @@ async def api(json: JSONBodyQueryAPI):
             app.state.active_inferences += 1
 
         # output = await run_in_threadpool(infer)
-        output = infer()  # MindSpore seems not to work well with multiple threads
+        loop = asyncio.get_event_loop()
+        output = await loop.run_in_executor(thread_pool, infer)
 
         async with app.state.metrics_lock:
             app.state.active_inferences = max(0, app.state.active_inferences - 1)
